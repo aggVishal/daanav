@@ -1,0 +1,48 @@
+rules_version = '2';
+
+// Daanav – Cloud Firestore security rules
+// Paste this whole file into Firebase console → Firestore Database → Rules → Publish.
+//
+// Data layout:
+//   users/{uid}/workouts/{workoutId}   one document per finished workout
+//   users/{uid}/meta/state             custom exercises + workout in progress
+//
+// Every signed-in person can read and write ONLY the documents under their
+// own user id. Nobody else (and nobody signed out) can see anything.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null
+        && request.auth.uid == uid
+        && allowedUser();
+    }
+
+    // ---- Optional: only let specific emails use the app ----------------
+    // By default anyone who creates an account can store their OWN workouts.
+    // To make Daanav private to you (and friends), replace `true` below with
+    // a list of emails, for example:
+    //   return request.auth.token.email in ['you@gmail.com', 'friend@gmail.com'];
+    function allowedUser() {
+      return true;
+    }
+
+    match /users/{uid}/workouts/{workoutId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.date is string
+        && request.resource.data.exercises is list
+        && request.resource.data.parts is list;
+    }
+
+    match /users/{uid}/meta/{docId} {
+      allow read, write: if isOwner(uid) && docId == 'state';
+    }
+
+    // Everything else is locked.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

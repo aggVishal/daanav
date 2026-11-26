@@ -72,7 +72,7 @@
     "Push-ups": { a: { hip: [49, 86], t: -80, hand: [30, 92], eb: -1, foot: [82, 92], kb: 1 }, b: { hip: [51.7, 77.3], t: -64.5, hand: [30, 92], eb: -1, foot: [82, 92], kb: 1 }, props: [], cue: "Body in one straight line. Chest to the floor, push back up." },
     "Dips": { a: { hip: [44, 63], t: 15, hand: [52, 52], eb: -1, foot: [38, 86], kb: 1 }, b: { hip: [44, 51], t: 15, hand: [52, 52], eb: -1, foot: [38, 76], kb: 1 }, props: dipBars, cue: "Lean forward a little, lower until shoulders are below elbows, push up." },
     /* Back */
-    "Deadlift": { a: { hip: [37, 68], t: 62, hand: [58, 81], eb: 1, foot: [52, 92], kb: 1 }, b: { hip: [48, 58], t: 0, hand: [49, 70], eb: 1, foot: [50, 92], kb: 1 }, props: [], wt: "bar", cue: "Flat back, bar close to shins. Push the floor away and stand tall." },
+    "Deadlift": { a: { hip: [37, 68], t: 62, hand: [58, 81], eb: 1, foot: [52, 92], kb: 1 }, b: { hip: [48, 58], t: 0, hand: [53, 69], eb: 1, foot: [50, 92], kb: 1 }, props: [], wt: "bar", cue: "Flat back, bar close to shins. Push the floor away and stand tall." },
     "Pull-ups": { a: { hip: [50, 57], t: 0, hand: [50, 7], eb: -1, foot: [46, 89], kb: 1 }, b: { hip: [49, 44], t: 0, hand: [50, 7], eb: -1, foot: [43, 75], kb: 1 }, props: pullBar, cue: "Hang with straight arms, pull until your chin clears the bar." },
     "Lat pulldown": { a: P(SEAT, { hip: [46, 68], t: -8, hand: [48, 18], eb: -1 }), b: P(SEAT, { hip: [46, 68], t: -8, hand: [50, 42], eb: -1 }), props: seat, cable: [54, 1], wt: "grip", cue: "Lean back slightly, pull the bar to your upper chest, squeeze your back." },
     "Barbell row": { a: P(HINGE, { hand: [64, 78], eb: 1 }), b: P(HINGE, { hand: [56, 66], eb: -1 }), props: [], wt: "bar", cue: "Hinge forward with a flat back. Row the bar to your belly button." },
@@ -89,7 +89,7 @@
     "Rear delt fly": { a: P(HINGE, { hand: [66, 77], eb: 1 }), b: P(HINGE, { hand: [72, 56], eb: 1 }), props: [], wt: "db", cue: "Hinge forward, raise the dumbbells out wide, squeeze your upper back." },
     "Shrugs": { a: P(STAND, { front: true, hand: [58, 59], eb: -1, foot: [54, 92] }), b: P(STAND, { front: true, sy: -4, hand: [58, 55], eb: -1, foot: [54, 92] }), props: [], wt: "db", cue: "Arms straight, lift your shoulders up to your ears and hold for a second." },
     /* Legs */
-    "Squat": { a: P(STAND, { hand: [44, 32], eb: -1, foot: [52, 92], kb: 1 }), b: { hip: [38, 74], t: 40, hand: [48, 54], eb: -1, foot: [52, 92], kb: 1 }, props: [], wt: "barS", cue: "Bar on your upper back. Sit down and back until thighs are level, then stand." },
+    "Squat": { a: P(STAND, { hand: [46, 32], eb: 1, foot: [52, 92], kb: 1 }), b: { hip: [38, 74], t: 40, hand: [49, 55], eb: 1, foot: [52, 92], kb: 1 }, props: [], wt: "barS", cue: "Bar on your upper back. Sit down and back until thighs are level, then stand." },
     "Leg press": { a: { hip: [40, 78], t: -60, hand: [44, 82], eb: 1, foot: [60, 62], kb: 1 }, b: { hip: [40, 78], t: -60, hand: [44, 82], eb: 1, foot: [74, 50], kb: 1 }, props: [{ line: [14, 58, 36, 84], w: 5 }, { line: [36, 84, 50, 84], w: 5 }, { line: [58, 78, 92, 44], w: 2 }], sled: true, cue: "Feet shoulder-width on the plate. Lower slowly, push back without locking knees." },
     "Romanian deadlift": { a: P(STAND, { hand: [50, 59], eb: 1, foot: [50, 92], kb: 1 }), b: { hip: [40, 60], t: 70, hand: [62, 77], eb: 1, foot: [50, 92], kb: 1 }, props: [], wt: "bar", cue: "Soft knees. Push your hips back, slide the bar down your legs, feel the hamstrings." },
     "Walking lunges": { a: P(STAND, { hip: [48, 58], foot: [58, 92], kb: 1, foot2: [38, 92], kb2: 1 }), b: { hip: [48, 72], t: 0, foot: [62, 92], kb: 1, foot2: [30, 92], kb2: 1 }, props: [], wt: "db", cue: "Big step forward, drop the back knee toward the floor, step through." },
@@ -186,7 +186,34 @@
   }
   function cue(name, part) { return pick(name, part).cue + (EX[name] ? "" : " (Example shown — your exercise may differ.)"); }
 
+  /* ---- muscles worked (keys drive the 3D highlight; labels show in the How-to view) ---- */
+  var MUSCLE_LABEL = { pecs: "Chest", delts: "Shoulders", traps: "Traps", lats: "Lats", biceps: "Biceps", triceps: "Triceps", forearms: "Forearms", abs: "Abs", obliques: "Obliques", glutes: "Glutes", quads: "Quads", hams: "Hamstrings", calves: "Calves", lowback: "Lower back" };
+  var PART_MUS = { Chest: ["pecs", "delts", "triceps"], Back: ["lats", "traps", "biceps"], Shoulders: ["delts", "traps"], Legs: ["quads", "glutes", "hams"], Biceps: ["biceps", "forearms"], Triceps: ["triceps"], Core: ["abs", "obliques"] };
+  var MUS = {
+    "Chest fly (machine)": ["pecs", "delts"], "Cable crossover": ["pecs", "delts"], "Push-ups": ["pecs", "triceps", "delts", "abs"], "Dips": ["pecs", "triceps", "delts"],
+    "Deadlift": ["glutes", "hams", "lowback", "traps", "forearms"], "Pull-ups": ["lats", "biceps", "forearms"], "Face pull": ["delts", "traps"], "T-bar row": ["lats", "traps", "biceps", "lowback"],
+    "Lateral raise": ["delts"], "Front raise": ["delts"], "Rear delt fly": ["delts", "traps"], "Shrugs": ["traps", "forearms"],
+    "Squat": ["quads", "glutes", "hams", "lowback"], "Leg press": ["quads", "glutes"], "Romanian deadlift": ["hams", "glutes", "lowback"], "Walking lunges": ["quads", "glutes", "hams"],
+    "Bulgarian split squat": ["quads", "glutes"], "Leg extension": ["quads"], "Leg curl": ["hams"], "Hip thrust": ["glutes", "hams"], "Calf raise": ["calves"],
+    "Close-grip bench press": ["triceps", "pecs"], "Hanging leg raise": ["abs", "obliques", "forearms"], "Ab wheel rollout": ["abs", "lats"], "Russian twist": ["obliques", "abs"]
+  };
+  var TIPS = {
+    Chest: ["Keep your shoulder blades squeezed together and down.", "Lower for about 2 seconds, push up with power.", "Breathe in on the way down, out as you push."],
+    Back: ["Lead with your elbows, not your hands.", "Pause and squeeze your back at the top.", "Keep your chest up and back flat."],
+    Shoulders: ["Brace your core so your lower back doesn’t arch.", "Use a weight you can control without swinging.", "Stop just short of shrugging your shoulders up."],
+    Legs: ["Keep your knees in line with your toes.", "Push through your whole foot, not just the toes.", "Control the way down — no bouncing."],
+    Biceps: ["Keep your elbows still at your sides.", "Lower all the way for a full stretch.", "Squeeze at the top for a second."],
+    Triceps: ["Keep your upper arms still.", "Lock out fully and squeeze.", "Lower slowly — the stretch builds strength."],
+    Core: ["Move slowly and keep tension the whole time.", "Breathe out as you crunch or lift.", "Stop if you feel it in your lower back."]
+  };
+  function muscles(name, part) { return (MUS[name] || PART_MUS[part] || PART_MUS.Chest).slice(); }
+  function partOf(name, part) { if (part) return part; for (var p in BY_PART) if (BY_PART[p] === name) return p; return "Chest"; }
+
   window.figSvg = svg;
   window.figCue = cue;
   window.figNames = Object.keys(EX);
+  window.figPose = function (name, part) { var e = pick(name, part); return { e: e, A: solve(e.a), B: solve(e.b), front: !!e.a.front }; };
+  window.figMuscles = function (name, part) { return muscles(name, partOf(name, part)); };
+  window.figMuscleLabel = MUSCLE_LABEL;
+  window.figTips = function (name, part) { return TIPS[partOf(name, part)] || TIPS.Chest; };
 })();

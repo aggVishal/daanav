@@ -14,7 +14,7 @@ A gym workout tracker: pick a body part, choose an exercise, log each set's weig
 - Weekly and monthly progress: total weight lifted, sets, workouts and new PRs
 - Strength chart for each exercise, with estimated 1-rep max
 - Workout history by date, sign in with Google or email
-- Animated figure and form tip for every exercise, with a rest timer between sets
+- 3D animated figure for every exercise, with the muscles worked highlighted — tap it for a full How-to you can rotate
 - Three themes (Daanav Red, Iron, Chalk), saved to your account
 - An animated celebration when you finish a workout
 
@@ -22,7 +22,9 @@ A gym workout tracker: pick a body part, choose an exercise, log each set's weig
 | File | What it does |
 |---|---|
 | `index.html`, `styles.css`, `app.js` | The app |
-| `figures.js` | Animated exercise figures and form tips |
+| `figures.js` | Exercise poses, form tips, muscles worked, 2D fallback figures |
+| `fig3d.js` | 3D exercise figures (three.js) |
+| `vendor/three.module.min.js` | three.js r160 (MIT licence in `vendor/three-LICENSE.txt`) |
 | `config.js` | Firebase web config (public by design) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Offline support and Home Screen icon |
 | `firebase/firestore.rules` | Security rules: each user can only read and write their own data |

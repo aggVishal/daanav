@@ -36,6 +36,7 @@ function curTheme(){const t=document.documentElement.dataset.theme;return THEMES
 function applyTheme(t){
   if(!THEMES.some(x=>x.id===t))t="red";
   document.documentElement.dataset.theme=t;
+  setTimeout(()=>fitText(),0);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>fitText());
   try{localStorage.setItem(THEME_KEY,t)}catch(e){}
   const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",{red:"#B3121F",iron:"#0E0E11",chalk:"#D4FF3A"}[t]);
 }
@@ -494,6 +495,7 @@ function render(){
   if(!signedIn){app.innerHTML=viewAuth();return}
   const v=tab==="workout"?viewWorkout():tab==="progress"?viewProgress():tab==="history"?viewHistory():viewAccount();
   app.innerHTML=v;
+  fitText(app);
   document.querySelectorAll("nav button").forEach(b=>{b.classList.toggle("on",b.dataset.tab===tab);b.setAttribute("aria-current",b.dataset.tab===tab?"page":"false")});
   ro.disconnect();const f=document.getElementById("fig");if(f){ro.observe(f);drawChart()}
   msgText="";
@@ -511,6 +513,18 @@ function openEx(name,part){
   A.cur=i;draft={w:"",r:""};markState();render();window.scrollTo(0,0);
 }
 function cleanActive(){const A=S.active;A.ex=A.ex.filter(e=>e.sets.length);A.cur=null}
+/* ---------- Auto-fit: shrink labels and numbers until they fit on one line ---------- */
+const FIT=".part b,.tile b,.cele .stat b";
+function fitText(root){
+  (root||document).querySelectorAll(FIT).forEach(el=>{
+    el.style.fontSize="";
+    let fs=parseFloat(getComputedStyle(el).fontSize),guard=0;
+    while(el.scrollWidth>el.clientWidth+0.5&&fs>11&&guard++<40){fs-=1;el.style.fontSize=fs+"px"}
+  });
+}
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>fitText());
+addEventListener("resize",()=>{clearTimeout(fitText.t);fitText.t=setTimeout(()=>fitText(),120)});
+
 /* ---------- Exercise photos (start ↔ end crossfade) ---------- */
 function exData(name){return window.EXDATA&&EXDATA[name]||null}
 function photoHtml(name,part,big){
@@ -584,7 +598,7 @@ function showCele(){
   const still=matchMedia("(prefers-reduced-motion: reduce)").matches,nums=[...el.querySelectorAll("[data-to]")],t0=performance.now()+700;
   cancelAnimationFrame(celeRaf);
   const step=now=>{const p=still?1:Math.max(0,Math.min(1,(now-t0)/1300)),e=1-Math.pow(1-p,3);
-    nums.forEach(n=>n.textContent=fmt(+n.dataset.to*e));if(p<1)celeRaf=requestAnimationFrame(step)};
+    nums.forEach(n=>n.textContent=fmt(+n.dataset.to*e));if(p<1)celeRaf=requestAnimationFrame(step);else fitText(el)};
   celeRaf=requestAnimationFrame(step);
   try{if(navigator.vibrate)navigator.vibrate([30,40,60])}catch(e){}
   setTimeout(()=>{const b=el.querySelector('[data-cele="done"]');if(b)b.focus({preventScroll:true})},1600);

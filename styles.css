@@ -81,7 +81,7 @@ input[type=text],input[type=email],input[type=password]{width:100%;height:50px;b
 .tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .tile{background:var(--soft);border-radius:16px;padding:12px 14px}
 .tile span{display:block;font-size:13px;color:var(--mute);font-weight:600}
-.tile b{display:block;font:var(--dw) clamp(26px,8vw,34px)/1.1 var(--display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile b{display:block;font:var(--dw) clamp(26px,8vw,34px)/1.1 var(--display);white-space:nowrap}
 .tile em{font-style:normal;font-size:13px;font-weight:600;color:var(--mute)}
 .up{color:var(--good)!important}.down{color:var(--bad)!important}
 .seg{display:grid;grid-template-columns:1fr 1fr;background:var(--soft);border-radius:14px;padding:4px;margin-bottom:14px}
@@ -340,3 +340,6 @@ body.celebrating{overflow:hidden}
 .daterow h3{margin:0}
 .pastbtn{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;background:var(--card)}
 #app>.pastbtn:first-child{position:relative}
+
+/* Auto-fit text: shrunk by fitText() in app.js until it fits on one line */
+.part b,.tile b,.cele .stat b{display:block;max-width:100%;white-space:nowrap}

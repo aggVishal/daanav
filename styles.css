@@ -338,8 +338,14 @@ body.celebrating{overflow:hidden}
 /* Date on an in-progress workout, and History's past-workout button */
 .daterow{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .daterow h3{margin:0}
-.pastbtn{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;background:var(--card)}
-#app>.pastbtn:first-child{position:relative}
+.pastbtn{display:flex;align-items:center;gap:14px;width:100%;text-align:left;color:var(--ink)}
+.pastbtn .pbi{flex:none;width:46px;height:46px;border-radius:14px;background:var(--accent);color:var(--accentInk);display:grid;place-items:center}
+[data-theme=chalk] .pastbtn .pbi{background:#0B0B0B;color:#D4FF3A}
+.pastbtn .pbt{flex:1;min-width:0}
+.pastbtn b{display:block;font:var(--dw) 20px/1.15 var(--display);font-stretch:var(--ds);text-transform:var(--case)}
+.pastbtn small{display:block;color:var(--mute);font-size:14px;margin-top:2px}
+.pastbtn .go{flex:none;color:var(--accent);font:var(--dw) 26px/1 var(--display)}
+[data-theme=chalk] .pastbtn .go{color:var(--ink)}
 
 /* Auto-fit text: shrunk by fitText() in app.js until it fits on one line */
 .part b,.tile b,.cele .stat b{display:block;max-width:100%;white-space:nowrap}

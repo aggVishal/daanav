@@ -303,7 +303,8 @@ const ro=new ResizeObserver(drawChart);
 function viewHistory(){
   setHead("History","Every session");
   const ws=sorted().reverse();
-  let h='<button class="btn ghost wide pastbtn" data-act="logpast"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M12 13v4M10 15h4"/></svg>Log a past workout</button>';
+  let h='<button class="card pastbtn" data-act="logpast"><span class="pbi" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M12 13v4M10 15h4"/></svg></span>'+
+    '<span class="pbt"><b>Log a past workout</b><small>Forgot to log a session? Add it for any earlier day.</small></span><span class="go" aria-hidden="true">›</span></button>';
   if(!ws.length)h+='<section class="card empty"><h3>Nothing here yet</h3><p>Finished workouts show up here by date.</p><button class="btn" data-tab-go="workout">Start a workout</button></section>';
   let m="";
   for(const w of ws){

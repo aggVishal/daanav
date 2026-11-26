@@ -42,7 +42,7 @@ function applyTheme(t){
 }
 const blank=()=>({workouts:[],active:null,custom:{},profile:{},pending:{up:{},del:{},state:0}});
 let S=blank();
-let tab="workout",period="week",pickPart=null,showAllParts=false,summary=null,openId=null,progEx=null,draft={w:"",r:""},msgText="",popSet=false;
+let logDate=null,pastMins=60,tab="workout",period="week",pickPart=null,showAllParts=false,summary=null,openId=null,progEx=null,draft={w:"",r:""},msgText="",popSet=false;
 let authEmail="",authName="",pendingName="",ready=false,FB=null,fbAuth=null,fdb=null,user=null,authMode="signin",authMsg="",authBusy=false,syncState="idle",syncErr="",flushing=false,flushTimer=null,ver=1,bootError="";
 
 /* ---------- Local cache (per user) ---------- */
@@ -134,12 +134,12 @@ const allSets=w=>w.ex.reduce((a,e)=>a.concat(e.sets),[]);
 const volOf=w=>allSets(w).reduce((a,s)=>a+s.w*s.r,0);
 const sorted=()=>S.workouts.slice().sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:a.start-b.start);
 
-function history(name,excludeId){
+function history(name,excludeId,upTo){
   const out=[];
-  for(const w of sorted()){if(w.id===excludeId)continue;for(const e of w.ex)if(e.name===name&&e.sets.length)out.push({date:w.date,sets:e.sets})}
+  for(const w of sorted()){if(w.id===excludeId||(upTo&&w.date>upTo))continue;for(const e of w.ex)if(e.name===name&&e.sets.length)out.push({date:w.date,sets:e.sets})}
   return out;
 }
-function bestW(name,excludeId){let b=0;for(const h of history(name,excludeId))for(const s of h.sets)if(s.w>b)b=s.w;return b}
+function bestW(name,excludeId,upTo){let b=0;for(const h of history(name,excludeId,upTo))for(const s of h.sets)if(s.w>b)b=s.w;return b}
 function exercisesFor(part){return LIB[part].concat((S.custom[part]||[]).filter(n=>!LIB[part].includes(n)))}
 
 function setHead(k,t){document.getElementById("kicker").textContent=k;document.getElementById("title").textContent=t}
@@ -149,14 +149,20 @@ function viewWorkout(){
   const today=dkey(new Date());
   const A=S.active;
   if(!A){
-    setHead(long(today),"What are you training today?");
+    const ld=logDate&&logDate<today?logDate:null,yest=dkey(new Date(Date.now()-864e5));
+    setHead(ld?"Logging a past workout":long(today),ld?"What did you train on "+parse(ld).toLocaleDateString(undefined,{weekday:"long"})+"?":"What are you training today?");
     const wk=weekOf(today),ws=S.workouts.filter(w=>weekOf(w.date)===wk);
-    return (user.name?'':nameCard(true))+'<section class="card"><h2>Pick a body part</h2><p class="sub">You can add more body parts once you’ve started.</p><div class="parts">'+
+    const dateCard='<section class="card datecard"><h3>Workout date</h3><div class="chips" role="radiogroup" aria-label="Workout date">'+
+      '<button class="chip'+(!ld?" on":"")+'" role="radio" aria-checked="'+!ld+'" data-logdate="today">Today</button>'+
+      '<button class="chip'+(ld===yest?" on":"")+'" role="radio" aria-checked="'+(ld===yest)+'" data-logdate="'+yest+'">Yesterday</button>'+
+      '<label class="chip datepick'+(ld&&ld!==yest?" on":"")+'"><span>'+(ld&&ld!==yest?esc(short(ld)):"Earlier date")+'</span><input type="date" id="logDateIn" max="'+yest+'" min="2015-01-01" value="'+(ld||"")+'" aria-label="Pick an earlier date"></label></div>'+
+      (ld?'<p class="pastnote">Logging for <b>'+esc(long(ld))+'</b>.</p><div class="durrow"><label for="pastMinsIn">How long was it?</label><span><input type="number" id="pastMinsIn" inputmode="numeric" min="5" max="300" step="5" value="'+pastMins+'"> min</span></div>':'')+'</section>';
+    return (user.name?'':nameCard(true))+dateCard+'<section class="card"><h2>Pick a body part</h2><p class="sub">You can add more body parts once you’ve started.</p><div class="parts">'+
       PARTS.map(p=>'<button class="part" data-start="'+p+'"><b>'+p+'</b><small>'+lastTrained(p)+'</small></button>').join("")+
       '</div></section><section class="card"><h3>This week</h3><div class="tiles">'+tile("Workouts",ws.length)+tile("Volume",fmt(ws.reduce((a,w)=>a+volOf(w),0))+" kg")+'</div></section>';
   }
   if(A.cur!=null&&A.ex[A.cur]) return viewLogger(A);
-  setHead(long(A.date),A.parts.join(" + "));
+  setHead(long(A.date)+(A.past?" · past workout":""),A.parts.join(" + "));
   const part=pickPart&&A.parts.includes(pickPart)?pickPart:A.parts[A.parts.length-1];
   const doneNames=A.ex.filter(e=>e.sets.length).map(e=>e.name);
   const first=!A.ex.some(e=>e.sets.length);
@@ -173,7 +179,7 @@ function viewWorkout(){
     h+=rest.length?'<div class="chips">'+rest.map(p=>'<button class="chip" data-addpart="'+p+'">+ '+p+'</button>').join("")+'</div>':'';
   }
   h+='<div class="exlist">'+exercisesFor(part).map(n=>{
-    const hs=history(n),l=hs[hs.length-1],done=doneNames.includes(n);
+    const hs=history(n,A.id,A.date),l=hs[hs.length-1],done=doneNames.includes(n);
     const hint=done?"Done today":l?"Last: "+bestOfSets(l.sets)+" · "+short(l.date):"Not logged yet";
     return '<button class="ex'+(done?" done":"")+'" data-ex="'+esc(n)+'" data-part="'+part+'"><span class="thumb" aria-hidden="true" data-thumb3d="'+esc(n)+'" data-part="'+part+'">'+figSvg(n,part,false)+'</span><span class="exn"><b>'+esc(n)+'</b><small>'+hint+'</small></span><span class="go">›</span></button>';
   }).join("")+'</div>';
@@ -193,7 +199,7 @@ function bestOfSets(sets){let b=sets[0];for(const s of sets)if(s.w>b.w||(s.w===b
 function viewLogger(A){
   const E=A.ex[A.cur];
   setHead(E.part+" · Exercise "+(A.ex.filter(e=>e.sets.length||e===E).indexOf(E)+1),E.name);
-  const hs=history(E.name,A.id),l=hs[hs.length-1],prev=bestW(E.name,A.id);
+  const hs=history(E.name,A.id,A.date),l=hs[hs.length-1],prev=bestW(E.name,A.id,A.date);
   if(draft.w===""){const s=E.sets[E.sets.length-1]||(l&&l.sets[0]);draft.w=s?kg(s.w):"20";draft.r=s?String(s.r):"10"}
   let h='<section class="card"><div class="form"><button class="fig2" data-zoom="1" data-fig3d="'+esc(E.name)+'" data-part="'+E.part+'" aria-label="Open 3D how-to for '+esc(E.name)+'">'+figSvg(E.name,E.part,true)+'<span class="zoomhint" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5M11 8v6M8 11h6"/></svg></span></button><div><b>How to</b><p>'+esc(figCue(E.name,E.part))+'</p>'+
     '<p class="sub" style="margin:6px 0 0">'+(prev?'Best so far: <b class="num">'+kg(prev)+' kg</b>':'First time logging this')+'</p></div></div>';
@@ -493,7 +499,10 @@ function render(){
 }
 function go(t){tab=t;render();window.scrollTo(0,0);app.classList.remove("enter");void app.offsetWidth;app.classList.add("enter");clearTimeout(go.t);go.t=setTimeout(()=>app.classList.remove("enter"),700)}
 function startWorkout(p){
-  S.active={id:uid(),date:dkey(new Date()),start:Date.now(),parts:[p],ex:[],cur:null};pickPart=p;showAllParts=false;markState();render();window.scrollTo(0,0);
+  const today=dkey(new Date()),past=logDate&&logDate<today?logDate:null;
+  S.active=past?{id:uid(),date:past,start:parse(past).setHours(18,0,0,0),past:true,mins:Math.max(5,Math.min(300,pastMins||60)),parts:[p],ex:[],cur:null}
+    :{id:uid(),date:today,start:Date.now(),parts:[p],ex:[],cur:null};
+  logDate=null;pickPart=p;showAllParts=false;markState();render();window.scrollTo(0,0);
 }
 function openEx(name,part){
   const A=S.active;let i=A.ex.findIndex(e=>e.name===name);
@@ -525,9 +534,9 @@ function celebrate(d){celeData=d;celeRun=0;showCele()}
 function showCele(){
   const d=celeData,el=document.getElementById("cele"),t=curTheme(),first=firstName();
   const msgs=[];
-  if(d.prs.length)msgs.push((d.prs.length===1?"A new personal record":d.prs.length+" new personal records")+" today"+(first?", "+first:"")+". "+d.prs[0].name+" is up "+kg(d.prs[0].delta)+" kg — that’s real strength.");
+  if(d.prs.length)msgs.push((d.prs.length===1?"A new personal record":d.prs.length+" new personal records")+(d.past?" on "+short(d.date):" today")+(first?", "+first:"")+". "+d.prs[0].name+" is up "+kg(d.prs[0].delta)+" kg — that’s real strength.");
   msgs.push(fmt(d.vol)+" kg moved in "+pl(d.mins,"minute")+". "+["That’s the Daanav in you showing up.","Every plate you add is earned.","Strong work — recover well and come back hungry."][celeRun%3]);
-  msgs.push(d.week>=2?"That’s workout #"+d.week+" this week. Consistency is your superpower.":"First workout of the week done — the hardest one is behind you.");
+  msgs.push(d.past?"Logged for "+long(d.date)+". Your history and progress charts are up to date.":d.week>=2?"That’s workout #"+d.week+" this week. Consistency is your superpower.":"First workout of the week done — the hardest one is behind you.");
   const msg=msgs[celeRun%msgs.length];
   const H={
     red:{kick:"Shabaash"+(first?", "+first:"")+"!",h:"Daanav<br><em>unleashed</em>"},
@@ -554,7 +563,7 @@ function showCele(){
     '<div class="stat up1 d3"><span>Time</span><b><span data-to="'+d.mins+'">0</span><small> min</small></b></div>'+
     '<div class="stat hot up1 d3"><span>New PRs</span><b data-to="'+d.prs.length+'">0</b></div></div>'+
     (d.prs.length?'<div class="prs up1 d4">'+d.prs.slice(0,3).map(p=>'<div><span>'+esc(p.name)+'</span><b>'+wl(p.w)+' × '+p.r+' · +'+kg(p.delta)+' kg</b></div>').join("")+'</div>':'')+
-    '<div class="week up1 d5">'+(d.week===1?"1st":d.week===2?"2nd":d.week===3?"3rd":d.week+"th")+' workout this week'+dots+'</div>'+
+    '<div class="week up1 d5">'+(d.week===1?"1st":d.week===2?"2nd":d.week===3?"3rd":d.week+"th")+' workout '+(d.past&&weekOf(d.date)!==weekOf(dkey(new Date()))?"that week":"this week")+dots+'</div>'+
     '<div class="acts up1 d5"><button class="btn wide" data-cele="done">Done</button><button class="link" data-cele="replay">Replay celebration</button></div></div>';
   el.hidden=false;document.body.classList.add("celebrating");el.scrollTop=0;
   el.setAttribute("aria-labelledby","celeTitle");
@@ -574,21 +583,22 @@ function finish(){
   if(!A.ex.length){S.active=null;markState();render();return}
   let prs=0;const prList=[];
   for(const e of A.ex){const b=bestW(e.name,A.id);if(b>0&&Math.max(...e.sets.map(s=>s.w))>b){prs++;prList.push(e.name)}}
-  const w={id:A.id,date:A.date,start:A.start,end:Date.now(),parts:A.parts.filter(p=>A.ex.some(e=>e.part===p)),ex:A.ex};
+  const w={id:A.id,date:A.date,start:A.start,end:A.past?A.start+A.mins*60000:Date.now(),parts:A.parts.filter(p=>A.ex.some(e=>e.part===p)),ex:A.ex};
   if(!w.parts.length)w.parts=A.parts;
   S.workouts.push(w);S.active=null;
   const prDetail=[];
-  for(const e of w.ex){const b=bestW(e.name,w.id),top=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);if(b>0&&top.w>b)prDetail.push({name:e.name,w:top.w,r:top.r,delta:top.w-b})}
+  for(const e of w.ex){const b=bestW(e.name,w.id,w.date),top=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);if(b>0&&top.w>b)prDetail.push({name:e.name,w:top.w,r:top.r,delta:top.w-b})}
   const wk=weekOf(w.date),inWeek=S.workouts.filter(x=>weekOf(x.date)===wk),days=[0,0,0,0,0,0,0];
   inWeek.forEach(x=>{days[(parse(x.date).getDay()+6)%7]=1});
   markUp(w.id);markState();
-  celebrate({vol:volOf(w),sets:allSets(w).length,mins:Math.max(1,Math.round((w.end-(w.start||w.end))/60000)),prs:prDetail,parts:w.parts,week:inWeek.length,days,dayName:parse(w.date).toLocaleDateString(undefined,{weekday:"long"})});
+  celebrate({past:!!A.past,date:w.date,vol:volOf(w),sets:allSets(w).length,mins:Math.max(1,Math.round((w.end-(w.start||w.end))/60000)),prs:prDetail,parts:w.parts,week:inWeek.length,days,dayName:parse(w.date).toLocaleDateString(undefined,{weekday:"long"})});
   render();
 }
 app.addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;
   const d=b.dataset,A=S.active;
   if(d.auth){authMode=d.auth;authMsg="";render();return}
+  if(d.logdate){logDate=d.logdate==="today"?null:d.logdate;render();return}
   if(d.zoom){const A2=S.active;if(A2&&A2.ex[A2.cur])openZoom(A2.ex[A2.cur].name,A2.ex[A2.cur].part);return}
   if(d.themepick){applyTheme(d.themepick);S.profile=Object.assign({},S.profile,{theme:d.themepick});markState();render();return}
   if(d.start){startWorkout(d.start);return}
@@ -627,6 +637,8 @@ app.addEventListener("click",e=>{
 app.addEventListener("input",e=>{const k=e.target.dataset&&e.target.dataset.draft;if(k)draft[k]=e.target.value});
 app.addEventListener("change",async e=>{
   if(e.target.id==="exSel"){progEx=e.target.value;render();return}
+  if(e.target.id==="logDateIn"){const v=e.target.value,today=dkey(new Date());if(/^\d{4}-\d{2}-\d{2}$/.test(v)&&v<today){logDate=v}else if(v>=today){logDate=null;msgText=""}render();return}
+  if(e.target.id==="pastMinsIn"){const n=parseInt(e.target.value,10);pastMins=n>0?Math.max(5,Math.min(300,n)):60;return}
 });
 app.addEventListener("submit",e=>{
   if(e.target.id==="authForm"){e.preventDefault();if(!authBusy)submitAuth();return}

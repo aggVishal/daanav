@@ -14,6 +14,7 @@ A gym workout tracker: pick a body part, choose an exercise, log each set's weig
 - Weekly and monthly progress: total weight lifted, sets, workouts and new PRs
 - Strength chart for each exercise, with estimated 1-rep max
 - Workout history by date, sign in with Google or email
+- Log a workout for a past day if you forgot (Today / Yesterday / any earlier date)
 - 3D animated figure for every exercise, with the muscles worked highlighted — tap it for a full How-to you can rotate
 - Three themes (Daanav Red, Iron, Chalk), saved to your account
 - An animated celebration when you finish a workout

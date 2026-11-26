@@ -8,6 +8,13 @@ A gym workout tracker: pick a body part, choose an exercise, log each set's weig
 - Backend: Firebase Authentication (email + password) and Cloud Firestore
 - Works offline. Changes sync when you're back online.
 
+## Features
+- Pick the body part you're training, then log each exercise's sets (weight × reps)
+- See what you lifted last time and get a PR badge when you beat your best
+- Weekly and monthly progress: total weight lifted, sets, workouts and new PRs
+- Strength chart for each exercise, with estimated 1-rep max
+- Workout history by date, sign in with Google or email
+
 ## Files
 | File | What it does |
 |---|---|

@@ -329,3 +329,8 @@ body.celebrating{overflow:hidden}
 .durrow{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:10px;font-size:15px;font-weight:600}
 .durrow span{display:flex;align-items:center;gap:6px;color:var(--mute)}
 .durrow input{width:84px;height:44px;border-radius:12px;border:2px solid var(--line);background:var(--card);text-align:center;font-size:16px;font-weight:700}
+
+/* Body-part tiles: long names (e.g. SHOULDERS) always fit */
+.part{container-type:inline-size}
+.part b{white-space:nowrap;font-size:clamp(14px,4.6vw,22px);font-size:clamp(14px,calc(17cqi - 2px),22px)}
+[data-theme=chalk] .part b{font-stretch:100%;letter-spacing:-.01em}

@@ -35,7 +35,6 @@ const THEME_KEY="daanav-theme";
 function curTheme(){const t=document.documentElement.dataset.theme;return THEMES.some(x=>x.id===t)?t:"red"}
 function applyTheme(t){
   if(!THEMES.some(x=>x.id===t))t="red";
-  if(document.documentElement.dataset.theme!==t&&window.Fig3D)Fig3D.resetTheme();
   document.documentElement.dataset.theme=t;
   try{localStorage.setItem(THEME_KEY,t)}catch(e){}
   const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute("content",{red:"#B3121F",iron:"#0E0E11",chalk:"#D4FF3A"}[t]);
@@ -181,7 +180,7 @@ function viewWorkout(){
   h+='<div class="exlist">'+exercisesFor(part).map(n=>{
     const hs=history(n,A.id,A.date),l=hs[hs.length-1],done=doneNames.includes(n);
     const hint=done?"Done today":l?"Last: "+bestOfSets(l.sets)+" · "+short(l.date):"Not logged yet";
-    return '<button class="ex'+(done?" done":"")+'" data-ex="'+esc(n)+'" data-part="'+part+'"><span class="thumb" aria-hidden="true" data-thumb3d="'+esc(n)+'" data-part="'+part+'">'+figSvg(n,part,false)+'</span><span class="exn"><b>'+esc(n)+'</b><small>'+hint+'</small></span><span class="go">›</span></button>';
+    return '<button class="ex'+(done?" done":"")+'" data-ex="'+esc(n)+'" data-part="'+part+'"><span class="thumb" aria-hidden="true">'+(exData(n)?'<img src="'+exData(n).img[0]+'" alt="" loading="lazy">':figSvg(n,part,false))+'</span><span class="exn"><b>'+esc(n)+'</b><small>'+hint+'</small></span><span class="go">›</span></button>';
   }).join("")+'</div>';
   h+='<form id="customForm" style="margin-top:12px" class="row"><input type="text" id="customName" maxlength="50" placeholder="Add your own '+part.toLowerCase()+' exercise" aria-label="Custom exercise name"><button class="btn ghost" type="submit" style="flex:0 0 auto">Add</button></form></section>';
   h+='<div class="stickybar"><div class="row">'+(first?'':'<button class="btn" data-act="finish">Finish workout</button>')+
@@ -201,7 +200,7 @@ function viewLogger(A){
   setHead(E.part+" · Exercise "+(A.ex.filter(e=>e.sets.length||e===E).indexOf(E)+1),E.name);
   const hs=history(E.name,A.id,A.date),l=hs[hs.length-1],prev=bestW(E.name,A.id,A.date);
   if(draft.w===""){const s=E.sets[E.sets.length-1]||(l&&l.sets[0]);draft.w=s?kg(s.w):"20";draft.r=s?String(s.r):"10"}
-  let h='<section class="card"><div class="form"><button class="fig2" data-zoom="1" data-fig3d="'+esc(E.name)+'" data-part="'+E.part+'" aria-label="Open 3D how-to for '+esc(E.name)+'">'+figSvg(E.name,E.part,true)+'<span class="zoomhint" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5M11 8v6M8 11h6"/></svg></span></button><div><b>How to</b><p>'+esc(figCue(E.name,E.part))+'</p>'+
+  let h='<section class="card"><div class="form"><button class="fig2" data-zoom="1" aria-label="Open how-to for '+esc(E.name)+'">'+photoHtml(E.name,E.part,false)+'<span class="zoomhint" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-5-5M11 8v6M8 11h6"/></svg></span></button><div><b>How to</b><p>'+esc(figCue(E.name,E.part))+'</p>'+
     '<p class="sub" style="margin:6px 0 0">'+(prev?'Best so far: <b class="num">'+kg(prev)+' kg</b>':'First time logging this')+'</p></div></div>';
   h+='<div class="last">'+(l?'<b>Last time, '+short(l.date)+':</b> <span class="num">'+l.sets.map(s=>wl(s.w,1)+"×"+s.r).join(" · ")+'</span>':'No previous sessions. Start with a weight you can do with good form.')+'</div>';
   h+='<div class="sets">'+E.sets.map((s,i)=>{
@@ -492,7 +491,6 @@ function render(){
   if(!signedIn){app.innerHTML=viewAuth();return}
   const v=tab==="workout"?viewWorkout():tab==="progress"?viewProgress():tab==="history"?viewHistory():viewAccount();
   app.innerHTML=v;
-  if(window.Fig3D)try{Fig3D.hydrate(app)}catch(e){}
   document.querySelectorAll("nav button").forEach(b=>{b.classList.toggle("on",b.dataset.tab===tab);b.setAttribute("aria-current",b.dataset.tab===tab?"page":"false")});
   ro.disconnect();const f=document.getElementById("fig");if(f){ro.observe(f);drawChart()}
   msgText="";
@@ -510,22 +508,35 @@ function openEx(name,part){
   A.cur=i;draft={w:"",r:""};markState();render();window.scrollTo(0,0);
 }
 function cleanActive(){const A=S.active;A.ex=A.ex.filter(e=>e.sets.length);A.cur=null}
-/* ---------- 3D how-to zoom ---------- */
+/* ---------- Exercise photos (start ↔ end crossfade) ---------- */
+function exData(name){return window.EXDATA&&EXDATA[name]||null}
+function photoHtml(name,part,big){
+  const d=exData(name);
+  if(!d)return figSvg(name,part,true);
+  return '<span class="ph'+(big?" big":"")+'"><img src="'+d.img[0]+'" alt="'+esc(name)+', start position"'+(big?'':' loading="lazy"')+'><img class="ph-b" src="'+d.img[1]+'" alt="'+esc(name)+', end position"'+(big?'':' loading="lazy"')+'></span>';
+}
+
+/* ---------- How-to zoom ---------- */
 function openZoom(name,part){
   const z=document.getElementById("zoom"),mus=figMuscles(name,part),L=figMuscleLabel;
   z.innerHTML='<div class="zwrap"><div class="zbar"><b>'+esc(name)+'</b><button class="zclose" data-zclose="1" aria-label="Close">×</button></div>'+
-    '<div class="zstage" data-fig3d="'+esc(name)+'" data-part="'+part+'" data-interactive="1">'+figSvg(name,part,true)+'</div>'+
-    '<p class="zhint">Drag to turn the figure</p>'+
-    '<div class="zcard"><h3>How to</h3><p>'+esc(figCue(name,part))+'</p></div>'+
+    '<div class="zstage">'+photoHtml(name,part,true)+'</div>'+
+    (exData(name)?'<div class="seg zseg" role="group" aria-label="Show position"><button data-zpos="play" class="on">Play</button><button data-zpos="0">Start</button><button data-zpos="1">End</button></div>':'')+
+    '<div class="zcard"><h3>How to</h3>'+(exData(name)?'<ol>'+exData(name).steps.map(s=>'<li>'+esc(s)+'</li>').join("")+'</ol>':'<p>'+esc(figCue(name,part))+'</p>')+'</div>'+
     '<div class="zcard"><h3>Muscles worked</h3><div class="zmus">'+mus.map(m=>'<span>'+L[m]+'</span>').join("")+'</div></div>'+
     '<div class="zcard"><h3>Tips</h3><ul>'+figTips(name,part).map(t=>'<li>'+esc(t)+'</li>').join("")+'</ul></div>'+
     '<button class="btn wide" data-zclose="1">Got it</button></div>';
   z.hidden=false;document.body.classList.add("celebrating");z.scrollTop=0;
-  const st=z.querySelector(".zstage");if(window.Fig3D)Fig3D.mount(st,name,part,{interactive:true});
   setTimeout(()=>{const b=z.querySelector(".zclose");if(b)b.focus({preventScroll:true})},50);
 }
 function closeZoom(){const z=document.getElementById("zoom");if(z.hidden)return;z.hidden=true;z.innerHTML="";document.body.classList.remove("celebrating");render()}
-document.getElementById("zoom").addEventListener("click",e=>{if(e.target.closest("[data-zclose]")||e.target.id==="zoom")closeZoom()});
+document.getElementById("zoom").addEventListener("click",e=>{
+  if(e.target.closest("[data-zclose]")||e.target.id==="zoom"){closeZoom();return}
+  const p=e.target.closest("[data-zpos]");if(!p)return;
+  const z=document.getElementById("zoom"),ph=z.querySelector(".ph");if(!ph)return;
+  z.querySelectorAll("[data-zpos]").forEach(b=>b.classList.toggle("on",b===p));
+  ph.classList.remove("show0","show1");if(p.dataset.zpos!=="play")ph.classList.add("show"+p.dataset.zpos);
+});
 document.addEventListener("keydown",e=>{if(e.key==="Escape")closeZoom()});
 
 /* ---------- Workout-complete celebration ---------- */

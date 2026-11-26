@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Daanav</title>
 <meta name="description" content="Daanav – track your gym workouts, sets and strength progress.">
-<meta name="theme-color" content="#d7263d">
+<meta name="theme-color" content="#B3121F">
+<script>try{var t=localStorage.getItem("daanav-theme");document.documentElement.dataset.theme=(t==="iron"||t==="chalk")?t:"red"}catch(e){document.documentElement.dataset.theme="red"}</script>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -15,7 +16,7 @@
 <link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800;900&family=Barlow:wght@400;500;600;700&family=Anton&family=Inter:wght@400;500;600;700;800&family=Archivo:wdth,wght@62..125,400..900&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -33,9 +34,11 @@
   <button data-tab="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg>History</button>
   <button data-tab="account"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Account</button>
 </nav>
+<div class="cele" id="cele" role="dialog" aria-modal="true" hidden></div>
 <div class="toast" id="toast" role="status" hidden><span id="toastMsg"></span><button id="toastUndo" type="button">Undo</button></div>
 <noscript><p style="padding:20px">Daanav needs JavaScript turned on.</p></noscript>
 <script src="config.js"></script>
+<script src="figures.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

@@ -14,11 +14,15 @@ A gym workout tracker: pick a body part, choose an exercise, log each set's weig
 - Weekly and monthly progress: total weight lifted, sets, workouts and new PRs
 - Strength chart for each exercise, with estimated 1-rep max
 - Workout history by date, sign in with Google or email
+- Animated figure and form tip for every exercise, with a rest timer between sets
+- Three themes (Daanav Red, Iron, Chalk), saved to your account
+- An animated celebration when you finish a workout
 
 ## Files
 | File | What it does |
 |---|---|
 | `index.html`, `styles.css`, `app.js` | The app |
+| `figures.js` | Animated exercise figures and form tips |
 | `config.js` | Firebase web config (public by design) |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Offline support and Home Screen icon |
 | `firebase/firestore.rules` | Security rules: each user can only read and write their own data |

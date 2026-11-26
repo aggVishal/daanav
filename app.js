@@ -165,7 +165,10 @@ function viewWorkout(){
   const part=pickPart&&A.parts.includes(pickPart)?pickPart:A.parts[A.parts.length-1];
   const doneNames=A.ex.filter(e=>e.sets.length).map(e=>e.name);
   const first=!A.ex.some(e=>e.sets.length);
-  let h='';
+  const todayK=dkey(new Date());
+  let h='<section class="card datecard"><div class="daterow"><h3>Workout date</h3><label class="chip datepick on"><span>'+(A.date===todayK?"Today":esc(short(A.date)))+'</span>'+
+    '<input type="date" id="actDateIn" max="'+todayK+'" min="2015-01-01" value="'+A.date+'" aria-label="Change workout date"></label></div>'+
+    (A.past?'<div class="durrow"><label for="actMinsIn">How long was it?</label><span><input type="number" id="actMinsIn" inputmode="numeric" min="5" max="300" step="5" value="'+(A.mins||60)+'"> min</span></div>':'')+'</section>';
   if(!first){
     h+='<section class="card"><h3>Done so far</h3><div class="done-ex">'+A.ex.filter(e=>e.sets.length).map(e=>
       '<div><span>'+esc(e.name)+'</span><span class="num">'+e.sets.map(s=>wl(s.w,1)+"×"+s.r).join(", ")+'</span></div>').join("")+'</div></section>';
@@ -299,7 +302,7 @@ const ro=new ResizeObserver(drawChart);
 function viewHistory(){
   setHead("History","Every session");
   const ws=sorted().reverse();
-  let h='';
+  let h='<button class="btn ghost wide pastbtn" data-act="logpast"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M12 13v4M10 15h4"/></svg>Log a past workout</button>';
   if(!ws.length)h+='<section class="card empty"><h3>Nothing here yet</h3><p>Finished workouts show up here by date.</p><button class="btn" data-tab-go="workout">Start a workout</button></section>';
   let m="";
   for(const w of ws){
@@ -401,7 +404,7 @@ function saveLast(){try{localStorage.setItem(LAST,JSON.stringify(user))}catch(e)
 let undoFn=null,toastTimer=null;
 function toast(msg,fn){
   const t=document.getElementById("toast");document.getElementById("toastMsg").textContent=msg;
-  undoFn=fn;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;undoFn=null},6000);
+  undoFn=fn;document.getElementById("toastUndo").hidden=!fn;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true;undoFn=null},6000);
 }
 document.getElementById("toastUndo").addEventListener("click",()=>{document.getElementById("toast").hidden=true;clearTimeout(toastTimer);const f=undoFn;undoFn=null;if(f)f()});
 
@@ -638,6 +641,9 @@ app.addEventListener("click",e=>{
       toast("Workout discarded",()=>{if(!S.active){S.active=prev;markState();render()}});break}
     case"syncnow":setSync("saving");syncNow();break;
     case"signout":signOut();break;
+    case"logpast":
+      if(S.active){go("workout");toast("Finish or discard your current workout first",null);break}
+      logDate=dkey(new Date(Date.now()-864e5));go("workout");break;
     case"google":googleSignIn();break;
 
     case"resetmail":
@@ -649,6 +655,13 @@ app.addEventListener("input",e=>{const k=e.target.dataset&&e.target.dataset.draf
 app.addEventListener("change",async e=>{
   if(e.target.id==="exSel"){progEx=e.target.value;render();return}
   if(e.target.id==="logDateIn"){const v=e.target.value,today=dkey(new Date());if(/^\d{4}-\d{2}-\d{2}$/.test(v)&&v<today){logDate=v}else if(v>=today){logDate=null;msgText=""}render();return}
+  if(e.target.id==="actDateIn"&&S.active){
+    const v=e.target.value,today=dkey(new Date()),A=S.active;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(v)||v>today){render();return}
+    if(v===today){if(A.past){A.past=false;delete A.mins;A.start=Date.now()}A.date=today}
+    else{A.date=v;A.past=true;A.mins=A.mins||60;A.start=parse(v).setHours(18,0,0,0)}
+    markState();render();return}
+  if(e.target.id==="actMinsIn"&&S.active){const n=parseInt(e.target.value,10);S.active.mins=n>0?Math.max(5,Math.min(300,n)):60;markState();return}
   if(e.target.id==="pastMinsIn"){const n=parseInt(e.target.value,10);pastMins=n>0?Math.max(5,Math.min(300,n)):60;return}
 });
 app.addEventListener("submit",e=>{

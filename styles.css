@@ -334,3 +334,9 @@ body.celebrating{overflow:hidden}
 .part{container-type:inline-size}
 .part b{white-space:nowrap;font-size:clamp(14px,4.6vw,22px);font-size:clamp(14px,calc(17cqi - 2px),22px)}
 [data-theme=chalk] .part b{font-stretch:100%;letter-spacing:-.01em}
+
+/* Date on an in-progress workout, and History's past-workout button */
+.daterow{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.daterow h3{margin:0}
+.pastbtn{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px;background:var(--card)}
+#app>.pastbtn:first-child{position:relative}

@@ -2,7 +2,7 @@
 // Your own files: fresh from the network when online, cached copy when offline.
 // Library and fonts: cached after the first load.
 // Requests to Firebase (sign-in and your data) are never cached here.
-const CACHE = "daanav-fb-v9";
+const CACHE = "daanav-fb-v10";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "figures.js", "exdata.js", "config.js", "manifest.webmanifest",
   "icons/icon-180.png", "icons/icon-192.png",
   "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js",
@@ -28,7 +28,7 @@ self.addEventListener("fetch", e => {
   if (url.origin === self.location.origin) {
     // Network first, so a new upload shows up straight away
     e.respondWith(
-      fetch(req).then(res => {
+      fetch(req, { cache: "no-cache" }).then(res => {   // always ask the server for the newest version
         if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }
         return res;
       }).catch(() => caches.match(req, { ignoreSearch: true })

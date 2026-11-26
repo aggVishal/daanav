@@ -27,7 +27,7 @@ const long=k=>parse(k).toLocaleDateString(undefined,{weekday:"short",day:"numeri
 const e1rm=s=>s.r<=0?0:s.r===1?s.w:s.w*(1+s.r/30);
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 
-const blank=()=>({workouts:[],active:null,custom:{},pending:{up:{},del:{},state:0}});
+const blank=()=>({workouts:[],active:null,custom:{},profile:{},pending:{up:{},del:{},state:0}});
 let S=blank();
 let tab="workout",period="week",pickPart=null,showAllParts=false,summary=null,openId=null,progEx=null,draft={w:"",r:""},msgText="",popSet=false;
 let authEmail="",authName="",pendingName="",ready=false,FB=null,fbAuth=null,fdb=null,user=null,authMode="signin",authMsg="",authBusy=false,syncState="idle",syncErr="",flushing=false,flushTimer=null,ver=1,bootError="";
@@ -69,7 +69,7 @@ async function flush(){
     const ops=[];
     for(const id of dels)ops.push(b=>b.delete(wDoc(id)));
     for(const id of ids){const w=S.workouts.find(x=>x.id===id);if(w)ops.push(b=>b.set(wDoc(id),toDoc(w)))}
-    if(sv)ops.push(b=>b.set(stateRef(),{custom:clean(S.custom||{}),active:clean(S.active),updatedAt:stamp()}));
+    if(sv)ops.push(b=>b.set(stateRef(),{custom:clean(S.custom||{}),active:clean(S.active),profile:clean(S.profile||{}),updatedAt:stamp()}));
     for(let i=0;i<ops.length;i+=400){const b=FB.writeBatch(fdb);ops.slice(i,i+400).forEach(f=>f(b));await timeout(b.commit())}
     for(const id of dels)delete S.pending.del[id];
     for(const id of ids)if(S.pending.up[id]===sent[id])delete S.pending.up[id];
@@ -88,7 +88,7 @@ async function pull(){
     for(const id of Object.keys(S.pending.up))if(!merged.some(w=>w.id===id)&&local.has(id))merged.push(local.get(id));
     S.workouts=merged;
     if(!S.pending.state){
-      if(st.exists()){const d=st.data();S.custom=d.custom||{};const act=d.active||null;
+      if(st.exists()){const d=st.data();S.custom=d.custom||{};S.profile=d.profile&&typeof d.profile==="object"?d.profile:{};const act=d.active||null;
         if(JSON.stringify(act)!==JSON.stringify(S.active||null)){S.active=act;draft={w:"",r:""}}}
       else if(S.active||Object.keys(S.custom).length)markState();
     }
@@ -308,7 +308,7 @@ function viewHistory(){
 
 /* ---------- Render & actions ---------- */
 /* ---------- Account ---------- */
-let acctMsg={},acctBusy=false;
+let acctMsg={},acctBusy=false,acctDraft=null;
 const firstName=()=>user&&user.name?user.name.trim().split(/\s+/)[0]:"";
 function nameCard(prompt){
   return '<section class="card">'+(prompt?'<h2>What should we call you?</h2><p class="sub">Your name shows at the top of every page.</p>':'<h3>Profile</h3>')+
@@ -318,19 +318,42 @@ function nameCard(prompt){
 }
 function viewAccount(){
   setHead("Account",user.name||"Your account");
-  let h=nameCard(false);
-  h+='<section class="card"><h3>Sync</h3><p class="sub" id="syncDetail">'+esc(syncDetail())+'</p><button class="btn ghost wide" data-act="syncnow">Sync now</button></section>';
-  h+='<section class="card"><h3>Change password</h3><form id="pwForm"><label class="fl" for="pw-cur">Current password</label><input type="password" id="pw-cur" autocomplete="current-password">'+
-    '<label class="fl" for="pw-new">New password</label><input type="password" id="pw-new" minlength="6" autocomplete="new-password">'+
-    '<button class="btn wide" type="submit" style="margin-top:14px"'+(acctBusy?" disabled":"")+'>'+(acctBusy?"Please wait…":"Change password")+'</button></form>'+
-    '<p class="msg">'+esc(acctMsg.pw||"")+'</p><button class="link" data-act="resetmail" style="margin-top:6px">Forgot it? Email me a reset link</button><p class="msg">'+esc(acctMsg.reset||"")+'</p></section>';
+  const pv=user.providers||[],pw=pv.includes("password");
+  const via=pw?"Email and password":pv.includes("google.com")?"Google":pv.includes("phone")?"Phone number":"Email and password";
+  const phone=acctDraft?acctDraft.ph:(S.profile&&S.profile.phone)||user.phone||"";
+  const nmv=acctDraft?acctDraft.nm:user.name||"";
+  let h='<section class="card"><h3>Profile</h3><form id="profileForm">'+
+    '<label class="fl" for="nm">Name</label><input type="text" id="nm" maxlength="40" autocomplete="name" placeholder="Your name" value="'+esc(nmv)+'">'+
+    '<label class="fl" for="ph">Phone number</label><input type="tel" id="ph" maxlength="20" autocomplete="tel" inputmode="tel" placeholder="e.g. 98765 43210" value="'+esc(phone)+'">'+
+    '<button class="btn wide" type="submit" style="margin-top:14px">Save</button></form><p class="msg">'+esc(acctMsg.name||"")+'</p>'+
+    '<dl class="facts"><div><dt>Signed in with</dt><dd>'+via+'</dd></div>'+
+    (user.email?'<div><dt>Email</dt><dd>'+esc(user.email)+'</dd></div>':'')+'</dl></section>';
+  if(pw){
+    h+='<section class="card"><h3>Change password</h3><form id="pwForm"><label class="fl" for="pw-cur">Current password</label><input type="password" id="pw-cur" autocomplete="current-password">'+
+      '<label class="fl" for="pw-new">New password</label><input type="password" id="pw-new" minlength="6" autocomplete="new-password">'+
+      '<button class="btn wide" type="submit" style="margin-top:14px"'+(acctBusy?" disabled":"")+'>'+(acctBusy?"Please wait…":"Change password")+'</button></form>'+
+      '<p class="msg">'+esc(acctMsg.pw||"")+'</p><button class="link" data-act="resetmail" style="margin-top:6px">Forgot it? Email me a reset link</button><p class="msg">'+esc(acctMsg.reset||"")+'</p></section>';
+  }
   h+='<section class="card"><button class="btn ghost wide" data-act="signout">Sign out</button>'+
     (hasPending()?'<p class="sub" style="margin:10px 0 0">Some changes are still waiting to sync. Daanav will try to save them before you sign out.</p>':'')+'</section>';
-  acctMsg={};
+  acctMsg={};acctDraft=null;
   return h;
 }
-async function saveName(){
+function normPhone(v){
+  let p=String(v||"").replace(/[\s().-]/g,"");
+  if(!p)return"";
+  if(!p.startsWith("+")){p=p.replace(/^0+/,"");p=/^\d{10}$/.test(p)?"+91"+p:"+"+p}
+  return /^\+\d{8,15}$/.test(p)?p:null;
+}
+async function saveProfile(){
   const n=(document.getElementById("nm").value||"").trim().replace(/\s+/g," ").slice(0,40);
+  const raw=document.getElementById("ph").value,ph=normPhone(raw);
+  if(!n||ph===null){acctDraft={nm:document.getElementById("nm").value,ph:raw};acctMsg.name=!n?"Enter your name.":"Enter a valid phone number, e.g. 98765 43210.";render();return}
+  S.profile=Object.assign({},S.profile,{phone:ph});markState();
+  await saveName(n);
+}
+async function saveName(given){
+  const n=given||(document.getElementById("nm").value||"").trim().replace(/\s+/g," ").slice(0,40);
   if(!n){acctMsg.name="Enter your name.";render();return}
   user.name=n;saveLast();render();
   try{if(fbAuth&&fbAuth.currentUser)await FB.updateProfile(fbAuth.currentUser,{displayName:n});acctMsg.name="Saved.";}
@@ -366,26 +389,80 @@ function toast(msg,fn){
 document.getElementById("toastUndo").addEventListener("click",()=>{document.getElementById("toast").hidden=true;clearTimeout(toastTimer);const f=undoFn;undoFn=null;if(f)f()});
 
 /* ---------- Sign-in screens ---------- */
+const G_ICON='<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>',P_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>';
+let phoneStep="number",phoneNum="",phoneConfirm=null,recaptcha=null;
 function viewAuth(){
   if(!ready&&!bootError){setHead("Your gym log","Loading…");return '<section class="card empty"><p>Loading your workouts…</p></section>'}
   if(bootError){setHead("Your gym log","Setup needed");return '<section class="card"><h2>Almost there</h2><p class="sub">'+esc(bootError)+'</p></section>'}
+  if(authMode==="phone")return viewPhone();
   const M={
     signin:["Welcome back","Sign in to see your workouts on any device.","Sign in"],
     signup:["Create your account","Your workouts are saved to your account and sync across devices.","Create account"],
-    forgot:["Reset password","We’ll email you a link to set a new password.","Send reset link"],
-    reset:["Set a new password","Choose a new password for your account.","Save password"]}[authMode];
+    forgot:["Reset password","We’ll email you a link to set a new password.","Send reset link"]}[authMode]||["Welcome back","","Sign in"];
   setHead("Your gym log",M[0]);
-  let h='<section class="card"><form id="authForm" novalidate><p class="sub">'+M[1]+'</p>';
+  let h='<section class="card">';
+  if(authMode!=="forgot")h+='<p class="sub">'+M[1]+'</p><div class="socials"><button class="btn ghost wide social" data-act="google"'+(authBusy?" disabled":"")+'>'+G_ICON+'Continue with Google</button>'+
+    '<button class="btn ghost wide social" data-auth="phone"'+(authBusy?" disabled":"")+'>'+P_ICON+'Continue with phone number</button></div><div class="or"><span>or use email</span></div>';
+  h+='<form id="authForm" novalidate>'+(authMode==="forgot"?'<p class="sub">'+M[1]+'</p>':'');
   if(authMode==="signup")h+='<label class="fl" for="au-name">Your name</label><input type="text" id="au-name" maxlength="40" autocomplete="name" value="'+esc(authName)+'">';
-  if(authMode!=="reset")h+='<label class="fl" for="au-email">Email</label><input type="email" id="au-email" autocomplete="email" inputmode="email" required value="'+esc(authEmail)+'">';
-  if(authMode!=="forgot")h+='<label class="fl" for="au-pass">'+(authMode==="reset"?"New password":"Password")+'</label><input type="password" id="au-pass" minlength="6" required autocomplete="'+(authMode==="signin"?"current-password":"new-password")+'">';
+  h+='<label class="fl" for="au-email">Email</label><input type="email" id="au-email" autocomplete="email" inputmode="email" required value="'+esc(authEmail)+'">';
+  if(authMode!=="forgot")h+='<label class="fl" for="au-pass">Password</label><input type="password" id="au-pass" minlength="6" required autocomplete="'+(authMode==="signin"?"current-password":"new-password")+'">';
   h+='<button class="btn wide" type="submit" style="margin-top:14px"'+(authBusy?" disabled":"")+'>'+(authBusy?"Please wait…":M[2])+'</button><p class="msg" id="authMsg">'+esc(authMsg)+'</p></form>';
   h+='<div class="authlinks">'+
     (authMode==="signin"?'<button class="link" data-auth="signup">New here? Create an account</button><button class="link" data-auth="forgot">Forgot password?</button>':'')+
     (authMode==="signup"||authMode==="forgot"?'<button class="link" data-auth="signin">Back to sign in</button>':'')+'</div></section>';
   return h;
 }
+function viewPhone(){
+  setHead("Your gym log",phoneStep==="code"?"Enter the code":"Sign in with phone");
+  let h='<section class="card"><form id="authForm" novalidate>';
+  if(phoneStep==="number"){
+    h+='<p class="sub">We’ll text you a 6-digit code. New here? An account is created for you automatically.</p>'+
+      '<label class="fl" for="au-phone">Mobile number</label><input type="tel" id="au-phone" inputmode="tel" autocomplete="tel" placeholder="98765 43210" value="'+esc(phoneNum)+'">'+
+      '<p class="sub" style="margin:6px 0 0;font-size:14px">Indian numbers can be typed without +91.</p>'+
+      '<button class="btn wide" type="submit" style="margin-top:14px"'+(authBusy?" disabled":"")+'>'+(authBusy?"Sending…":"Send code")+'</button>';
+  }else{
+    h+='<p class="sub">We sent a code to <b>'+esc(phoneNum)+'</b>.</p>'+
+      '<label class="fl" for="au-code">6-digit code</label><input type="text" id="au-code" class="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">'+
+      '<button class="btn wide" type="submit" style="margin-top:14px"'+(authBusy?" disabled":"")+'>'+(authBusy?"Checking…":"Verify and sign in")+'</button>';
+  }
+  h+='<p class="msg" id="authMsg">'+esc(authMsg)+'</p></form><div class="authlinks">'+
+    (phoneStep==="code"?'<button class="link" data-act="phoneback">Change number</button>':'')+
+    '<button class="link" data-act="phoneexit">Back to other sign-in options</button></div></section>';
+  return h;
+}
+async function submitPhone(){
+  if(!navigator.onLine){authMsg="You’re offline. Connect to the internet to sign in.";render();return}
+  if(phoneStep==="number"){
+    const p=normPhone(document.getElementById("au-phone").value);
+    if(!p){authMsg="Enter a valid mobile number, e.g. 98765 43210.";render();return}
+    phoneNum=p;authBusy=true;authMsg="";render();
+    try{
+      if(!recaptcha)recaptcha=new FB.RecaptchaVerifier(fbAuth,"recaptcha",{size:"invisible"});
+      phoneConfirm=await FB.signInWithPhoneNumber(fbAuth,phoneNum,recaptcha);
+      phoneStep="code";
+    }catch(e){authMsg=friendly(e);try{if(recaptcha)recaptcha.clear()}catch(_){}recaptcha=null}
+  }else{
+    const code=(document.getElementById("au-code").value||"").replace(/\D/g,"");
+    if(code.length!==6){authMsg="Enter the 6-digit code from the text message.";render();return}
+    authBusy=true;authMsg="";render();
+    try{await phoneConfirm.confirm(code);phoneStep="number";phoneConfirm=null;authMode="signin"}
+    catch(e){authMsg=friendly(e)}
+  }
+  authBusy=false;render();
+  const f=document.getElementById(phoneStep==="code"?"au-code":"au-phone");if(f&&!user)f.focus();
+}
+async function googleSignIn(){
+  if(!navigator.onLine){authMsg="You’re offline. Connect to the internet to sign in.";render();return}
+  let pr;
+  try{const prov=new FB.GoogleAuthProvider();prov.setCustomParameters({prompt:"select_account"});pr=FB.signInWithPopup(fbAuth,prov)}
+  catch(e){authMsg=friendly(e);render();return}
+  authBusy=true;authMsg="";render();
+  try{await pr}catch(e){authMsg=friendly(e)}
+  authBusy=false;render();
+}
 async function submitAuth(){
+  if(authMode==="phone")return submitPhone();
   const email=(document.getElementById("au-email")||{}).value,pass=(document.getElementById("au-pass")||{}).value;
   const em=email&&email.trim();
   authEmail=em||"";
@@ -420,10 +497,25 @@ function friendly(e){
     "auth/weak-password":"Choose a stronger password (at least 6 characters).",
     "auth/too-many-requests":"Too many attempts. Wait a few minutes and try again.",
     "auth/network-request-failed":"Couldn’t reach the server. Check your connection and try again.",
-    "auth/operation-not-allowed":"Email sign-in isn’t switched on yet. Turn on Email/Password in Firebase → Authentication → Sign-in method.",
+    "auth/operation-not-allowed":"This sign-in method isn’t switched on yet. Turn it on in Firebase → Authentication → Sign-in method.",
+    "auth/popup-closed-by-user":"","auth/cancelled-popup-request":"","auth/user-cancelled":"",
+    "auth/popup-blocked":"The Google window was blocked. Allow pop-ups for this site and try again.",
+    "auth/operation-not-supported-in-this-environment":"Google sign-in doesn’t work inside the Home Screen app. Open Daanav in Safari to use Google, or sign in with phone or email here.",
+    "auth/web-storage-unsupported":"Google sign-in doesn’t work inside the Home Screen app. Open Daanav in Safari to use Google, or sign in with phone or email here.",
+    "auth/unauthorized-domain":"This web address isn’t allowed in Firebase yet. Add it under Authentication → Settings → Authorized domains.",
+    "auth/account-exists-with-different-credential":"This email already has an account with another sign-in method. Use that method instead.",
+    "auth/billing-not-enabled":"Phone sign-in needs Firebase’s Blaze (pay-as-you-go) plan. Use Google or email for now.",
+    "auth/invalid-phone-number":"That phone number doesn’t look right. Check it and try again.",
+    "auth/missing-phone-number":"Enter your mobile number.",
+    "auth/quota-exceeded":"Too many codes have been sent today. Try again later, or use Google or email.",
+    "auth/captcha-check-failed":"The security check failed. Reload the page and try again.",
+    "auth/invalid-app-credential":"The security check failed. Reload the page and try again.",
+    "auth/invalid-verification-code":"That code isn’t right. Check the text message and try again.",
+    "auth/code-expired":"That code has expired. Tap “Change number” to get a new one.",
+    "auth/missing-verification-code":"Enter the 6-digit code from the text message.",
     "auth/admin-restricted-operation":"New sign-ups are turned off for this app.",
     "auth/user-disabled":"This account has been disabled.","auth/requires-recent-login":"Please sign out and sign in again, then retry."};
-  return M[c]||(e&&e.message)||"Something went wrong. Please try again.";
+  return c in M?M[c]:((e&&e.message)||"Something went wrong. Please try again.");
 }
 
 function render(){
@@ -462,7 +554,7 @@ function finish(){
 app.addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;
   const d=b.dataset,A=S.active;
-  if(d.auth){authMode=d.auth;authMsg="";render();return}
+  if(d.auth){authMode=d.auth;authMsg="";if(d.auth==="phone")phoneStep="number";render();return}
   if(d.start){startWorkout(d.start);return}
   if(d.tabGo){go(d.tabGo);return}
   if(d.pick){pickPart=d.pick;render();return}
@@ -490,6 +582,9 @@ app.addEventListener("click",e=>{
     case"closeSummary":summary=null;render();break;
     case"syncnow":setSync("saving");syncNow();break;
     case"signout":signOut();break;
+    case"google":googleSignIn();break;
+    case"phoneback":phoneStep="number";phoneConfirm=null;authMsg="";render();break;
+    case"phoneexit":authMode="signin";phoneStep="number";phoneConfirm=null;authMsg="";render();break;
     case"resetmail":
       if(!navigator.onLine){acctMsg.reset="You’re offline. Connect to the internet first.";render();break}
       sendReset(user.email).then(()=>{acctMsg.reset="Reset link sent to "+user.email+". Check your spam folder too."}).catch(e=>{acctMsg.reset=friendly(e)}).then(()=>{if(tab==="account")render()});break;
@@ -502,6 +597,7 @@ app.addEventListener("change",async e=>{
 app.addEventListener("submit",e=>{
   if(e.target.id==="authForm"){e.preventDefault();if(!authBusy)submitAuth();return}
   if(e.target.id==="nameForm"){e.preventDefault();saveName();return}
+  if(e.target.id==="profileForm"){e.preventDefault();saveProfile();return}
   if(e.target.id==="pwForm"){e.preventDefault();if(!acctBusy)changePassword();return}
   if(e.target.id!=="customForm")return;e.preventDefault();
   const n=document.getElementById("customName").value.trim().replace(/\s+/g," ");if(!n)return;
@@ -517,14 +613,14 @@ async function signOut(){
   if(hasPending()&&navigator.onLine){setSync("saving");try{await timeout(flush(),6000)}catch(e){}}
   const id=user&&user.id;
   try{if(id)localStorage.removeItem("daanav-v1:"+id);localStorage.removeItem(LAST)}catch(e){}
-  user=null;S=blank();tab="workout";summary=null;authMode="signin";authMsg="You’ve signed out.";setSync("idle");render();
+  user=null;S=blank();tab="workout";summary=null;authMode="signin";phoneStep="number";phoneConfirm=null;authMsg="You’ve signed out.";setSync("idle");render();
   try{if(fbAuth)await FB.signOut(fbAuth)}catch(e){}
 }
 function handleSession(u){
   ready=true;
   if(!u){if(user){user=null;S=blank()}render();return}
-  if(user&&user.id===u.id)return;
-  user={id:u.id,email:u.email,name:u.name||pendingName||""};pendingName="";
+  if(user&&user.id===u.id){if(!user.providers||!user.providers.length){user.providers=u.providers||[];user.phone=u.phone||user.phone}return}
+  user={id:u.id,email:u.email||"",name:u.name||pendingName||"",phone:u.phone||"",providers:u.providers||[]};pendingName="";
   saveLast();
   loadCache();authMsg="";render();
   syncNow();
@@ -546,7 +642,7 @@ async function boot(){
   const fapp=FB.initializeApp(fc);
   fbAuth=FB.getAuth(fapp);fdb=FB.getFirestore(fapp);
   render();
-  FB.onAuthStateChanged(fbAuth,u=>setTimeout(()=>handleSession(u?{id:u.uid,email:u.email,name:u.displayName||""}:null),0));
+  FB.onAuthStateChanged(fbAuth,u=>setTimeout(()=>handleSession(u?{id:u.uid,email:u.email||"",name:u.displayName||"",phone:u.phoneNumber||"",providers:(u.providerData||[]).map(p=>p.providerId)}:null),0));
   addEventListener("online",()=>{setSync("saving");syncNow()});
   addEventListener("offline",()=>setSync("offline"));
   document.addEventListener("visibilitychange",()=>{if(!document.hidden&&user)syncNow()});

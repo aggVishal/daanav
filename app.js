@@ -389,20 +389,17 @@ function toast(msg,fn){
 document.getElementById("toastUndo").addEventListener("click",()=>{document.getElementById("toast").hidden=true;clearTimeout(toastTimer);const f=undoFn;undoFn=null;if(f)f()});
 
 /* ---------- Sign-in screens ---------- */
-const G_ICON='<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>',P_ICON='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="M11 18h2"/></svg>';
-let phoneStep="number",phoneNum="",phoneConfirm=null,recaptcha=null;
+const G_ICON='<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
 function viewAuth(){
   if(!ready&&!bootError){setHead("Your gym log","Loading…");return '<section class="card empty"><p>Loading your workouts…</p></section>'}
   if(bootError){setHead("Your gym log","Setup needed");return '<section class="card"><h2>Almost there</h2><p class="sub">'+esc(bootError)+'</p></section>'}
-  if(authMode==="phone")return viewPhone();
   const M={
     signin:["Welcome back","Sign in to see your workouts on any device.","Sign in"],
     signup:["Create your account","Your workouts are saved to your account and sync across devices.","Create account"],
     forgot:["Reset password","We’ll email you a link to set a new password.","Send reset link"]}[authMode]||["Welcome back","","Sign in"];
   setHead("Your gym log",M[0]);
   let h='<section class="card">';
-  if(authMode!=="forgot")h+='<p class="sub">'+M[1]+'</p><div class="socials"><button class="btn ghost wide social" data-act="google"'+(authBusy?" disabled":"")+'>'+G_ICON+'Continue with Google</button>'+
-    '<button class="btn ghost wide social" data-auth="phone"'+(authBusy?" disabled":"")+'>'+P_ICON+'Continue with phone number</button></div><div class="or"><span>or use email</span></div>';
+  if(authMode!=="forgot")h+='<p class="sub">'+M[1]+'</p><div class="socials"><button class="btn ghost wide social" data-act="google"'+(authBusy?" disabled":"")+'>'+G_ICON+'Continue with Google</button></div><div class="or"><span>or use email</span></div>';
   h+='<form id="authForm" novalidate>'+(authMode==="forgot"?'<p class="sub">'+M[1]+'</p>':'');
   if(authMode==="signup")h+='<label class="fl" for="au-name">Your name</label><input type="text" id="au-name" maxlength="40" autocomplete="name" value="'+esc(authName)+'">';
   h+='<label class="fl" for="au-email">Email</label><input type="email" id="au-email" autocomplete="email" inputmode="email" required value="'+esc(authEmail)+'">';
@@ -412,45 +409,6 @@ function viewAuth(){
     (authMode==="signin"?'<button class="link" data-auth="signup">New here? Create an account</button><button class="link" data-auth="forgot">Forgot password?</button>':'')+
     (authMode==="signup"||authMode==="forgot"?'<button class="link" data-auth="signin">Back to sign in</button>':'')+'</div></section>';
   return h;
-}
-function viewPhone(){
-  setHead("Your gym log",phoneStep==="code"?"Enter the code":"Sign in with phone");
-  let h='<section class="card"><form id="authForm" novalidate>';
-  if(phoneStep==="number"){
-    h+='<p class="sub">We’ll text you a 6-digit code. New here? An account is created for you automatically.</p>'+
-      '<label class="fl" for="au-phone">Mobile number</label><input type="tel" id="au-phone" inputmode="tel" autocomplete="tel" placeholder="98765 43210" value="'+esc(phoneNum)+'">'+
-      '<p class="sub" style="margin:6px 0 0;font-size:14px">Indian numbers can be typed without +91.</p>'+
-      '<button class="btn wide" type="submit" style="margin-top:14px"'+(authBusy?" disabled":"")+'>'+(authBusy?"Sending…":"Send code")+'</button>';
-  }else{
-    h+='<p class="sub">We sent a code to <b>'+esc(phoneNum)+'</b>.</p>'+
-      '<label class="fl" for="au-code">6-digit code</label><input type="text" id="au-code" class="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">'+
-      '<button class="btn wide" type="submit" style="margin-top:14px"'+(authBusy?" disabled":"")+'>'+(authBusy?"Checking…":"Verify and sign in")+'</button>';
-  }
-  h+='<p class="msg" id="authMsg">'+esc(authMsg)+'</p></form><div class="authlinks">'+
-    (phoneStep==="code"?'<button class="link" data-act="phoneback">Change number</button>':'')+
-    '<button class="link" data-act="phoneexit">Back to other sign-in options</button></div></section>';
-  return h;
-}
-async function submitPhone(){
-  if(!navigator.onLine){authMsg="You’re offline. Connect to the internet to sign in.";render();return}
-  if(phoneStep==="number"){
-    const p=normPhone(document.getElementById("au-phone").value);
-    if(!p){authMsg="Enter a valid mobile number, e.g. 98765 43210.";render();return}
-    phoneNum=p;authBusy=true;authMsg="";render();
-    try{
-      if(!recaptcha)recaptcha=new FB.RecaptchaVerifier(fbAuth,"recaptcha",{size:"invisible"});
-      phoneConfirm=await FB.signInWithPhoneNumber(fbAuth,phoneNum,recaptcha);
-      phoneStep="code";
-    }catch(e){authMsg=friendly(e);try{if(recaptcha)recaptcha.clear()}catch(_){}recaptcha=null}
-  }else{
-    const code=(document.getElementById("au-code").value||"").replace(/\D/g,"");
-    if(code.length!==6){authMsg="Enter the 6-digit code from the text message.";render();return}
-    authBusy=true;authMsg="";render();
-    try{await phoneConfirm.confirm(code);phoneStep="number";phoneConfirm=null;authMode="signin"}
-    catch(e){authMsg=friendly(e)}
-  }
-  authBusy=false;render();
-  const f=document.getElementById(phoneStep==="code"?"au-code":"au-phone");if(f&&!user)f.focus();
 }
 async function googleSignIn(){
   if(!navigator.onLine){authMsg="You’re offline. Connect to the internet to sign in.";render();return}
@@ -462,7 +420,6 @@ async function googleSignIn(){
   authBusy=false;render();
 }
 async function submitAuth(){
-  if(authMode==="phone")return submitPhone();
   const email=(document.getElementById("au-email")||{}).value,pass=(document.getElementById("au-pass")||{}).value;
   const em=email&&email.trim();
   authEmail=em||"";
@@ -504,15 +461,6 @@ function friendly(e){
     "auth/web-storage-unsupported":"Google sign-in doesn’t work inside the Home Screen app. Open Daanav in Safari to use Google, or sign in with phone or email here.",
     "auth/unauthorized-domain":"This web address isn’t allowed in Firebase yet. Add it under Authentication → Settings → Authorized domains.",
     "auth/account-exists-with-different-credential":"This email already has an account with another sign-in method. Use that method instead.",
-    "auth/billing-not-enabled":"Phone sign-in needs Firebase’s Blaze (pay-as-you-go) plan. Use Google or email for now.",
-    "auth/invalid-phone-number":"That phone number doesn’t look right. Check it and try again.",
-    "auth/missing-phone-number":"Enter your mobile number.",
-    "auth/quota-exceeded":"Too many codes have been sent today. Try again later, or use Google or email.",
-    "auth/captcha-check-failed":"The security check failed. Reload the page and try again.",
-    "auth/invalid-app-credential":"The security check failed. Reload the page and try again.",
-    "auth/invalid-verification-code":"That code isn’t right. Check the text message and try again.",
-    "auth/code-expired":"That code has expired. Tap “Change number” to get a new one.",
-    "auth/missing-verification-code":"Enter the 6-digit code from the text message.",
     "auth/admin-restricted-operation":"New sign-ups are turned off for this app.",
     "auth/user-disabled":"This account has been disabled.","auth/requires-recent-login":"Please sign out and sign in again, then retry."};
   return c in M?M[c]:((e&&e.message)||"Something went wrong. Please try again.");
@@ -554,7 +502,7 @@ function finish(){
 app.addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;
   const d=b.dataset,A=S.active;
-  if(d.auth){authMode=d.auth;authMsg="";if(d.auth==="phone")phoneStep="number";render();return}
+  if(d.auth){authMode=d.auth;authMsg="";render();return}
   if(d.start){startWorkout(d.start);return}
   if(d.tabGo){go(d.tabGo);return}
   if(d.pick){pickPart=d.pick;render();return}
@@ -583,8 +531,7 @@ app.addEventListener("click",e=>{
     case"syncnow":setSync("saving");syncNow();break;
     case"signout":signOut();break;
     case"google":googleSignIn();break;
-    case"phoneback":phoneStep="number";phoneConfirm=null;authMsg="";render();break;
-    case"phoneexit":authMode="signin";phoneStep="number";phoneConfirm=null;authMsg="";render();break;
+
     case"resetmail":
       if(!navigator.onLine){acctMsg.reset="You’re offline. Connect to the internet first.";render();break}
       sendReset(user.email).then(()=>{acctMsg.reset="Reset link sent to "+user.email+". Check your spam folder too."}).catch(e=>{acctMsg.reset=friendly(e)}).then(()=>{if(tab==="account")render()});break;
@@ -613,7 +560,7 @@ async function signOut(){
   if(hasPending()&&navigator.onLine){setSync("saving");try{await timeout(flush(),6000)}catch(e){}}
   const id=user&&user.id;
   try{if(id)localStorage.removeItem("daanav-v1:"+id);localStorage.removeItem(LAST)}catch(e){}
-  user=null;S=blank();tab="workout";summary=null;authMode="signin";phoneStep="number";phoneConfirm=null;authMsg="You’ve signed out.";setSync("idle");render();
+  user=null;S=blank();tab="workout";summary=null;authMode="signin";authMsg="You’ve signed out.";setSync("idle");render();
   try{if(fbAuth)await FB.signOut(fbAuth)}catch(e){}
 }
 function handleSession(u){

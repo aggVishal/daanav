@@ -151,7 +151,6 @@ body.noauth{padding-bottom:24px}
 .or{display:flex;align-items:center;gap:12px;margin:18px 0 4px;color:var(--mute);font-size:14px}
 .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
 input[type=tel]{width:100%;height:50px;border-radius:14px;border:2px solid var(--line);background:var(--card);padding:0 14px;font-size:16px}
-input.code{font:700 26px/1 "Barlow Condensed",sans-serif;letter-spacing:.3em;text-align:center}
 /* Account facts */
 .facts{margin:14px 0 0;display:grid;gap:8px}
 .facts div{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--line);padding-top:8px;font-size:15px}

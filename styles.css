@@ -383,3 +383,21 @@ body.celebrating{overflow:hidden}
 .sh-load{margin:30px 0;font-weight:600}
 .share .btn{min-height:54px;font-size:17px;text-decoration:none}
 .share .ghostc{background:transparent;border:2px solid var(--line);color:var(--ink)}
+
+/* Progress: getting stronger + sets per muscle */
+.tile em.note{display:block;color:var(--mute);font-weight:500;margin-bottom:2px}
+.strong>div{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:10px;align-items:baseline;padding:9px 0;border-top:1px solid var(--line);font-size:15px}
+.strong>div:first-child{border-top:0}
+.strong .sn{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.strong b{font-weight:700}
+.strong span:last-child{min-width:74px;text-align:right;font-weight:700;font-size:14px;white-space:nowrap}
+.strong .up,.msets .ok,.legend .ok{color:#22A06B}
+.strong .down,.msets .lo,.legend .lo{color:#E5A00D}
+.msets .hi,.legend .hi{color:#E5383B}
+.mute{color:var(--mute)}
+.track.band{background:linear-gradient(90deg,var(--soft) var(--b0),color-mix(in srgb,#22A06B 22%,var(--soft)) var(--b0) var(--b1),var(--soft) var(--b1))}
+.msets .hrow>span:last-child{font-weight:700}
+.legend{margin:10px 0 0;font-size:13px}
+[data-theme=chalk] .strong .up,[data-theme=chalk] .msets .ok,[data-theme=chalk] .legend .ok{color:#0A7A45}
+[data-theme=chalk] .strong .down,[data-theme=chalk] .msets .lo,[data-theme=chalk] .legend .lo{color:#A15C00}
+.msets .track i.lo{background:#E5A00D}.msets .track i.ok{background:#22A06B}.msets .track i.hi{background:#E5383B}

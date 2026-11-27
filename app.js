@@ -243,6 +243,32 @@ function prsIn(key){
     for(const e of w.ex)for(const s of e.sets){const b=best[e.name]||0;if(inP&&b>0&&s.w>b)hit.add(e.name);if(s.w>b)best[e.name]=s.w}}
   return hit.size;
 }
+/* Getting stronger: best estimated 1RM (or reps, for bodyweight) this period vs everything before it. */
+function strongerCard(cur,c){
+  const before={},now={};
+  for(const w of S.workouts){const k=keyOf(w),tgt=k===cur?now:k<cur?before:null;if(!tgt)continue;
+    for(const e of w.ex)for(const st of e.sets){const bw=!st.w,v=bw?st.r:e1rm(st);const o=tgt[e.name];
+      if(!o||(o.bw&&!bw)||(o.bw===bw&&v>o.v))tgt[e.name]={v,bw}}}
+  const rows=Object.keys(now).map(n=>{const a=now[n],b=before[n];const same=b&&b.bw===a.bw;return{n,a,d:same?a.v-b.v:null}});
+  if(!rows.length)return '<section class="card"><h3>Getting stronger</h3><p class="sub">Train '+(period==="week"?"this week":"this month")+' to see which lifts went up.</p></section>';
+  rows.sort((x,y)=>(y.d==null?-1e9:y.d)-(x.d==null?-1e9:x.d)||x.n.localeCompare(y.n));
+  const comp=rows.filter(r=>r.d!=null),up=comp.filter(r=>r.d>0.01).length;
+  const val=r=>r.a.bw?pl(r.a.v,"rep"):kg(Math.round(r.a.v*2)/2)+' kg';
+  const dl=r=>r.d==null?'<span class="mute">first time</span>':Math.abs(r.d)<0.01?'<span class="mute">same</span>':'<span class="'+(r.d>0?"up":"down")+'">'+(r.d>0?"▲ +":"▼ ")+(r.a.bw?Math.abs(Math.round(r.d))+(Math.abs(Math.round(r.d))===1?" rep":" reps"):kg(Math.round(Math.abs(r.d)*2)/2)+' kg')+'</span>';
+  return '<section class="card"><h3>Getting stronger</h3><p class="sub">'+(comp.length?'<b>'+up+' of '+comp.length+'</b> lifts beat your previous best '+(period==="week"?"this week":"this month")+'. ':'')+'Compared using estimated 1-rep max (best reps for bodyweight moves).</p>'+
+    '<div class="strong">'+rows.slice(0,6).map(r=>'<div><span class="sn">'+esc(r.n)+'</span><b class="num">'+val(r)+'</b>'+dl(r)+'</div>').join("")+'</div>'+
+    (rows.length>6?'<p class="sub" style="margin:8px 0 0">+'+(rows.length-6)+' more below in Personal records.</p>':'')+'</section>';
+}
+/* Hard sets per muscle this week, against the common 10–20 sets/week guideline. */
+function muscleSetsCard(){
+  const wk=weekOf(dkey(new Date())),sets={};
+  for(const w of S.workouts)if(weekOf(w.date)===wk)for(const e of w.ex)sets[e.part]=(sets[e.part]||0)+e.sets.length;
+  const parts=Object.keys(LIB),max=Math.max(24,...Object.values(sets));
+  const tag=v=>v===0?'<span class="mute">–</span>':v<10?'<span class="lo">'+v+'</span>':v<=20?'<span class="ok">'+v+'</span>':'<span class="hi">'+v+'</span>';
+  return '<section class="card"><h3>Sets per muscle this week</h3><p class="sub">Most lifters grow best with about <b>10–20 sets per muscle each week</b>. The shaded band shows that range.</p>'+
+    '<div class="msets">'+parts.map(k=>{const v=sets[k]||0;return '<div class="hrow"><span>'+k+'</span><span class="track band" style="--b0:'+(10/max*100)+'%;--b1:'+(20/max*100)+'%"><i class="'+(v<10?"lo":v<=20?"ok":"hi")+'" style="width:'+(v/max*100)+'%"></i></span>'+tag(v)+'</div>'}).join("")+'</div>'+
+    '<p class="sub legend"><span class="lo">●</span> under 10 &nbsp; <span class="ok">●</span> 10–20 &nbsp; <span class="hi">●</span> over 20</p></section>';
+}
 function viewProgress(){
   setHead("Progress",period==="week"?"Your weeks":"Your months");
   const keys=periodKeys(8),cur=keys[7],prv=keys[6];
@@ -256,14 +282,9 @@ function viewProgress(){
   let h='<div class="seg" role="tablist"><button class="'+(period==="week"?"on":"")+'" data-period="week">Weekly</button><button class="'+(period==="month"?"on":"")+'" data-period="month">Monthly</button></div>';
   if(!S.workouts.length)return h+'<section class="card empty"><h3>No workouts yet</h3><p>Log your first workout and your progress shows up here.</p><button class="btn" data-tab-go="workout">Start a workout</button></section>';
   h+='<section class="card"><h3>'+(period==="week"?"This week":"This month")+'</h3><div class="tiles">'+
-    tile("Workouts",c.n,chip(ch(c.n,p.n),lbl))+tile("Volume (kg)",fmt(c.vol),chip(ch(c.vol,p.vol),lbl))+
-    tile("Sets",c.sets,chip(ch(c.sets,p.sets),lbl))+tile("New PRs",prsIn(cur),'<em>heavier than ever before</em>')+'</div></section>';
-  const max=Math.max(1,...keys.map(k=>by[k].vol));
-  h+='<section class="card"><h3>Volume per '+period+'</h3><p class="sub">Weight × reps, added up across all sets.</p><div class="bars">'+keys.map((k,i)=>
-    '<div class="bar'+(k===cur?" cur":"")+'"><i style="height:'+(by[k].vol/max*100)+'%">'+(by[k].vol?'<b>'+(by[k].vol>=1000?(by[k].vol/1000).toFixed(1)+"k":fmt(by[k].vol))+'</b>':'')+'</i><span>'+plabel(k,i,keys)+'</span></div>').join("")+'</div></section>';
-  const parts=Object.entries(c.parts).sort((a,b)=>b[1]-a[1]),pm=Math.max(1,...parts.map(x=>x[1]));
-  h+='<section class="card"><h3>Sets by body part, '+(period==="week"?"this week":"this month")+'</h3>'+(parts.length?parts.map(([k,v])=>
-    '<div class="hrow"><span>'+k+'</span><span class="track"><i style="width:'+(v/pm*100)+'%"></i></span><span class="num">'+pl(v,"set")+'</span></div>').join(""):'<p class="sub">Nothing logged yet '+(period==="week"?"this week":"this month")+'.</p>')+'</section>';
+    tile("New PRs",prsIn(cur),'<em>heavier than ever before</em>')+tile("Workouts",c.n,chip(ch(c.n,p.n),lbl))+
+    tile("Sets",c.sets,chip(ch(c.sets,p.sets),lbl))+tile("Volume (kg)",fmt(c.vol),'<em class="note">weight × reps</em>'+chip(ch(c.vol,p.vol),lbl))+'</div></section>';
+  h+=strongerCard(cur,c);
   const names=[...new Set(sorted().flatMap(w=>w.ex.filter(e=>e.sets.length).map(e=>e.name)))].sort();
   if(!progEx||!names.includes(progEx)){const last=sorted().pop();progEx=last&&last.ex.length?last.ex[0].name:names[0]}
   const pts=history(progEx).map(x=>({d:x.date,top:Math.max(...x.sets.map(s=>s.w)),rm:Math.max(...x.sets.map(e1rm))}));
@@ -275,6 +296,10 @@ function viewProgress(){
     h+='<p class="sub" style="margin:6px 0 0"><span style="color:var(--accent)">●</span> Top weight &nbsp; <span style="color:var(--chart2)">●</span> Estimated 1-rep max</p>';
   }
   h+='</section>';
+  h+=muscleSetsCard();
+  const max=Math.max(1,...keys.map(k=>by[k].vol));
+  h+='<section class="card"><h3>Volume per '+period+'</h3><p class="sub">Weight × reps, added up across all sets. Useful for comparing the same kind of workout over time. Heavy leg moves count far more than arm moves, and bodyweight moves count as 0.</p><div class="bars">'+keys.map((k,i)=>
+    '<div class="bar'+(k===cur?" cur":"")+'"><i style="height:'+(by[k].vol/max*100)+'%">'+(by[k].vol?'<b>'+(by[k].vol>=1000?(by[k].vol/1000).toFixed(1)+"k":fmt(by[k].vol))+'</b>':'')+'</i><span>'+plabel(k,i,keys)+'</span></div>').join("")+'</div></section>';
   const rec={};for(const w of sorted())for(const e of w.ex)for(const s of e.sets){const r=rec[e.name];if(!r||s.w>r.w||(s.w===r.w&&s.r>r.r))rec[e.name]={w:s.w,r:s.r,d:w.date,rm:0};rec[e.name].rm=Math.max(rec[e.name].rm||0,e1rm(s))}
   const rows=Object.entries(rec).sort((a,b)=>a[0].localeCompare(b[0]));
   h+='<section class="card"><h3>Personal records</h3><table class="stack"><thead><tr><th>Exercise</th><th class="r">Best set</th><th class="r">Est. 1RM</th><th class="r">Date</th></tr></thead><tbody>'+

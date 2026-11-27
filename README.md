@@ -11,7 +11,7 @@ A gym workout tracker: pick a body part, choose an exercise, log each set's weig
 ## Features
 - Pick the body part you're training, then log each exercise's sets (weight × reps)
 - See what you lifted last time and get a PR badge when you beat your best
-- Weekly and monthly progress: total weight lifted, sets, workouts and new PRs
+- Weekly and monthly progress: new PRs, "Getting stronger" (estimated 1-rep max vs your previous best), sets per muscle against the 10–20 sets/week guideline, and volume (weight × reps)
 - Strength chart for each exercise, with estimated 1-rep max
 - Workout history by date, sign in with Google or email
 - Log a workout for a past day if you forgot (Today / Yesterday / any earlier date)

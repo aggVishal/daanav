@@ -589,3 +589,7 @@ nav button{font-size:12px}
 .dp-key{margin:10px 0 10px;font-size:13px;display:flex;align-items:center;gap:6px}
 .dp-key .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block}
 [data-theme=chalk] .dp-key .dot{background:#0B0B0B}
+.ugrp{margin:14px 0 2px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute)}
+.urow small.r b.ago{display:block;font-size:13px;color:var(--ink);font-weight:700}
+.urow small.r b.ago.hot{color:var(--good)}
+.av.live{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--good)}

@@ -1145,6 +1145,12 @@ function priceAfter(p,coupon){
   if(coupon)v=coupon.type==="flat"?v-coupon.value:v*(1-coupon.value/100);
   return Math.max(0,Math.round(v));
 }
+/* "Last used": refresh lastSeen when the app is opened or brought back, at most every 15 minutes. */
+let seenAt=0;
+async function touchSeen(){
+  if(!fdb||!user||user.guest||!navigator.onLine||Date.now()-seenAt<15*60000)return;seenAt=Date.now();
+  try{await timeout(FB.setDoc(FB.doc(fdb,"users",user.id),{lastSeen:stamp()},{merge:true}),10000)}catch(e){seenAt=0}
+}
 /* A small profile doc per user, so the admin can see sign-ups and referrals. */
 async function touchProfile(created){
   if(!fdb||!user||user.guest)return;
@@ -1153,7 +1159,7 @@ async function touchProfile(created){
   let ref="";try{ref=localStorage.getItem(REF_KEY)||""}catch(e){}
   const fresh=created&&Date.now()-Date.parse(created)<30*60000;
   if(ref&&ref!==refCode()&&fresh)d.referredBy=ref;
-  try{await timeout(FB.setDoc(FB.doc(fdb,"users",user.id),d,{merge:true}),10000);if(ref)localStorage.removeItem(REF_KEY)}catch(e){}
+  try{await timeout(FB.setDoc(FB.doc(fdb,"users",user.id),d,{merge:true}),10000);seenAt=Date.now();if(ref)localStorage.removeItem(REF_KEY)}catch(e){}
 }
 
 /* ---------- Side menu ---------- */
@@ -1246,7 +1252,7 @@ function shareInvite(){
 }
 
 /* ---------- Admin ---------- */
-let admSub="pricing",admMsg={},admCoupons=null,admUsers=null,admLoaded={},admBusy=false,admQ="";
+let admSort="seen",admSub="pricing",admMsg={},admCoupons=null,admUsers=null,admLoaded={},admBusy=false,admQ="";
 const ADM_TABS=[["pricing","Pricing"],["offers","Offers"],["coupons","Coupons"],["referrals","Referrals"],["users","Users"],["general","General"]];
 const sw=(name,on,label,note)=>'<label class="swrow"><span><b>'+label+'</b>'+(note?'<small>'+note+'</small>':'')+'</span><span class="sw"><input type="checkbox" name="'+name+'"'+(on?" checked":"")+'><i></i></span></label>';
 const fnum=(name,val,label,attrs)=>'<label class="fl">'+label+'</label><input type="number" inputmode="decimal" name="'+name+'" value="'+esc(String(val))+'" '+(attrs||"")+'>';
@@ -1266,6 +1272,7 @@ async function admLoad(what){
   catch(e){admMsg[what]={t:admErr(e).replace("Couldn’t save","Couldn’t load")};if(what==="coupons")admCoupons=[];else admUsers=[]}
   if(tab==="admin")render();
 }
+function ago(t){const m=Math.round((Date.now()-t)/60000);if(m<2)return"Active now";if(m<60)return m+" min ago";const h=Math.round(m/60);if(h<24)return h+(h===1?" hour ago":" hours ago");const d=Math.round(h/24);if(d===1)return"Yesterday";if(d<7)return d+" days ago";if(d<60)return Math.round(d/7)+(Math.round(d/7)===1?" week ago":" weeks ago");return short(dkey(new Date(t)))}
 const tsDate=v=>{if(!v)return"";const ms=typeof v==="string"?Date.parse(v):v.toMillis?v.toMillis():v.seconds?v.seconds*1000:+v;return ms?short(dkey(new Date(ms))):""};
 function viewAdmin(){
   setHead("Admin","Control room");
@@ -1313,11 +1320,20 @@ function viewAdmin(){
   }else if(admSub==="users"){
     admLoad("users");
     if(!admUsers)h+='<section class="card"><p class="sub">Loading users…</p>'+amsg("users")+'</section>';
-    else{const wk=Date.now()-7*864e5,ms=v=>!v?0:typeof v==="string"?Date.parse(v):v.toMillis?v.toMillis():v.seconds?v.seconds*1000:+v;
-      const q=admQ.toLowerCase(),list=admUsers.filter(u=>!q||(u.name||"").toLowerCase().includes(q)||(u.email||"").toLowerCase().includes(q)).sort((a,b)=>ms(b.joined)-ms(a.joined));
-      h+='<section class="card"><div class="tiles">'+tile("Users",admUsers.length)+tile("Active this week",admUsers.filter(u=>ms(u.lastSeen)>wk).length)+tile("New this week",admUsers.filter(u=>ms(u.joined)>wk).length)+tile("Referred",admUsers.filter(u=>u.referredBy).length)+'</div></section>'+
-        '<section class="card"><input type="text" id="admQ" placeholder="Search name or email" value="'+esc(admQ)+'"><div class="ulist">'+(list.length?list.slice(0,200).map(u=>'<div class="urow"><span class="av sm">'+esc(((u.name||u.email||"?").trim()[0]||"?").toUpperCase())+'</span><div><b>'+esc(u.name||"No name")+'</b><small>'+esc(u.email||"")+'</small></div><small class="r">Joined '+(tsDate(u.joined)||"–")+'<br>Seen '+(tsDate(u.lastSeen)||"–")+'</small></div>').join(""):'<p class="sub">No users match.</p>')+'</div>'+
-        '<p class="sub" style="margin:10px 0 0">Users appear here after they open the updated app once. Guests (no account) aren’t listed.</p>'+amsg("users")+'</section>'}
+    else{const now=Date.now(),D=864e5,ms=v=>!v?0:typeof v==="string"?Date.parse(v)||0:v.toMillis?v.toMillis():v.seconds?v.seconds*1000:+v||0;
+      const seen=u=>ms(u.lastSeen),cnt=t=>admUsers.filter(u=>seen(u)>now-t).length;
+      const q=admQ.toLowerCase(),list=admUsers.filter(u=>!q||(u.name||"").toLowerCase().includes(q)||(u.email||"").toLowerCase().includes(q))
+        .sort(admSort==="new"?(a,b)=>ms(b.joined)-ms(a.joined):(a,b)=>seen(b)-seen(a));
+      const grp=u=>{const t=seen(u);return !t?"Never seen":t>now-D?"Active in the last 24 hours":t>now-7*D?"Active this week":t>now-30*D?"Active this month":"Not active for over a month"};
+      h+='<section class="card"><h3>Who’s using Daanav</h3><div class="tiles">'+tile("Last 24 hours",cnt(D))+tile("Last 7 days",cnt(7*D))+tile("Last 30 days",cnt(30*D))+tile("All users",admUsers.length,'<em>'+admUsers.filter(u=>ms(u.joined)>now-7*D).length+' new this week</em>')+'</div></section>'+
+        '<section class="card"><input type="text" id="admQ" placeholder="Search name or email" value="'+esc(admQ)+'">'+
+        '<div class="seg" style="margin-top:10px"><button class="'+(admSort!=="new"?"on":"")+'" data-admsort="seen">Last used</button><button class="'+(admSort==="new"?"on":"")+'" data-admsort="new">Newest sign-ups</button></div><div class="ulist">';
+      let last="";
+      h+=list.length?list.slice(0,300).map(u=>{let hd="";if(admSort!=="new"){const g=grp(u);if(g!==last){last=g;hd='<h4 class="ugrp">'+g+'</h4>'}}
+        const t=seen(u),live=t>now-15*60000;
+        return hd+'<div class="urow"><span class="av sm'+(live?' live':'')+'">'+esc(((u.name||u.email||"?").trim()[0]||"?").toUpperCase())+'</span><div><b>'+esc(u.name||"No name")+'</b><small>'+esc(u.email||"")+'</small></div>'+
+          '<small class="r"><b class="ago'+(t>now-D?' hot':'')+'">'+(t?ago(t):"–")+'</b>Joined '+(tsDate(u.joined)||"–")+'</small></div>'}).join(""):'<p class="sub">No users match.</p>';
+      h+='</div><p class="sub" style="margin:10px 0 0">“Last used” updates whenever someone opens the app (at most every 15 minutes). People appear after they open the updated app once. Guests aren’t listed.</p>'+amsg("users")+'</section>'}
   }else{
     h+='<section class="card"><h3>General</h3><form id="admGen">'+sw("guestMode",G.guestMode,"Allow trying without an account","Shows “Try without signing up” on the sign-in screen.")+
       '<label class="fl">Announcement banner (optional)</label><textarea name="announcement" maxlength="160" rows="3" placeholder="e.g. New: share your workouts to Instagram!">'+esc(G.announcement)+'</textarea><small class="mute">Shown at the top of the app for everyone. Leave empty to hide.</small>'+
@@ -1354,8 +1370,9 @@ async function createCoupon(f){
   admBusy=false;render();
 }
 app.addEventListener("click",async e=>{
-  const b=e.target.closest("[data-admsub],[data-adm],[data-adm-cdel]");if(!b)return;
-  if(b.dataset.admsub){admSub=b.dataset.admsub;render();return}
+  const b=e.target.closest("[data-admsub],[data-admsort],[data-adm],[data-adm-cdel]");if(!b)return;
+  if(b.dataset.admsub){admSub=b.dataset.admsub;if(admSub==="users"){admLoaded.users=0}render();return}
+  if(b.dataset.admsort){admSort=b.dataset.admsort;render();return}
   if(b.dataset.admCdel){if(!isAdmin())return;const id=b.dataset.admCdel,c=admCoupons.find(x=>x.id===id);
     try{await timeout(FB.deleteDoc(FB.doc(fdb,"coupons",id)),12000);admCoupons=admCoupons.filter(x=>x.id!==id);render();
       toast(id+" deleted",async()=>{const d=Object.assign({},c);delete d.id;try{await FB.setDoc(FB.doc(fdb,"coupons",id),d);admCoupons=admCoupons.concat([c]).sort((a,b)=>a.id.localeCompare(b.id));render()}catch(e2){}})}
@@ -1395,7 +1412,7 @@ async function boot(){
   loadConf();
   addEventListener("online",()=>{setSync("saving");syncNow()});
   addEventListener("offline",()=>setSync("offline"));
-  document.addEventListener("visibilitychange",()=>{if(!document.hidden&&user)syncNow()});
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden&&user){syncNow();touchSeen()}});
 }
 if("serviceWorker" in navigator&&location.protocol==="https:")navigator.serviceWorker.register("sw.js").catch(()=>{});
 boot();

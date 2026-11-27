@@ -19,6 +19,8 @@ A gym workout tracker: pick a body part, choose an exercise, log each set's weig
 - Three themes (Daanav Red, Iron, Chalk), saved to your account
 - An animated celebration when you finish a workout
 - Share your finished workout as an Instagram or WhatsApp story image
+- Side menu with Account, Plans, Invite friends and Admin
+- Admin (only for the admin email): pricing and free trial, sitewide offers, coupons, referrals, users list, announcement banner and guest-mode switch
 - Try the app without an account (workouts stay on the phone, and move into your account when you sign up)
 
 ## Files

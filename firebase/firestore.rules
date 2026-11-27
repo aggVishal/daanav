@@ -4,11 +4,14 @@ rules_version = '2';
 // Paste this whole file into Firebase console → Firestore Database → Rules → Publish.
 //
 // Data layout:
+//   users/{uid}                        small profile (name, email, joined, referral code)
 //   users/{uid}/workouts/{workoutId}   one document per finished workout
 //   users/{uid}/meta/state             custom exercises + workout in progress
+//   config/app                         pricing, offer, referrals, general settings (Admin)
+//   coupons/{CODE}                     coupon codes (Admin)
 //
-// Every signed-in person can read and write ONLY the documents under their
-// own user id. Nobody else (and nobody signed out) can see anything.
+// Every signed-in person can read and write ONLY their own workouts.
+// Only the admin email (verified) can change settings, manage coupons and list users.
 
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -26,6 +29,36 @@ service cloud.firestore {
     //   return request.auth.token.email in ['you@gmail.com', 'friend@gmail.com'];
     function allowedUser() {
       return true;
+    }
+
+    // The one admin. Must match ADMIN_EMAIL in app.js. The email must be
+    // verified (Google sign-in always is; email+password needs the link).
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email == 'aggarwalvishal904@gmail.com'
+        && request.auth.token.email_verified == true;
+    }
+
+    // App settings: everyone can read (prices, offers, announcement), only admin writes.
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin() && docId == 'app';
+    }
+
+    // Coupons: a signed-in user can look up ONE code they typed; only admin can list or change.
+    match /coupons/{code} {
+      allow get: if request.auth != null;
+      allow list, write: if isAdmin();
+    }
+
+    // Small profile per user, used for the admin Users list and referrals.
+    match /users/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['name', 'email', 'refCode', 'lastSeen', 'joined', 'referredBy'])
+        && (resource == null || !('referredBy' in resource.data)
+            || request.resource.data.referredBy == resource.data.referredBy);
     }
 
     match /users/{uid}/workouts/{workoutId} {

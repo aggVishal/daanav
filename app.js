@@ -479,7 +479,7 @@ function viewAuth(){
     (authMode==="signin"?'<button class="link" data-auth="signup">New here? Create an account</button><button class="link" data-auth="forgot">Forgot password?</button>':'')+
     (authMode==="signup"||authMode==="forgot"?'<button class="link" data-auth="signin">Back to sign in</button>':'')+'</div></section>';
   if(isGuest())h+='<section class="card tryapp"><button class="btn ghost wide" data-act="guestback">← Back to the app</button><p class="sub" style="margin:10px 0 0">Your trial workouts move into your account when you sign up or sign in.</p></section>';
-  else if(authMode!=="forgot")h+='<section class="card tryapp"><b>Just want to look around?</b><p class="sub">Try Daanav without an account. Your workouts stay on this phone, and you can sign up any time to keep them.</p><button class="btn ghost wide" data-act="guesttry">Try without signing up</button></section>';
+  else if(authMode!=="forgot"&&CONF.general.guestMode)h+='<section class="card tryapp"><b>Just want to look around?</b><p class="sub">Try Daanav without an account. Your workouts stay on this phone, and you can sign up any time to keep them.</p><button class="btn ghost wide" data-act="guesttry">Try without signing up</button></section>';
   return h;
 }
 async function googleSignIn(){
@@ -543,9 +543,15 @@ function render(){
   document.body.classList.toggle("noauth",!signedIn);
   setSync(syncState);
   document.getElementById("hello").textContent=signedIn&&firstName()?"Hi, "+firstName():"";
+  const mb=document.getElementById("menuBtn");mb.hidden=!signedIn;
+  if(signedIn){const nm=isGuest()?"G":((user.name||user.email||"D").trim()[0]||"D").toUpperCase();mb.querySelector(".av").textContent=nm}
   if(!signedIn){app.innerHTML=viewAuth();return}
-  const v=tab==="workout"?viewWorkout():tab==="progress"?viewProgress():tab==="history"?viewHistory():viewAccount();
-  app.innerHTML=(isGuest()&&tab!=="account"?guestBanner(tab!=="workout"):'')+v;
+  if(tab==="admin"&&!isAdmin())tab="account";
+  if(tab==="invite"&&(isGuest()||!(CONF.referral.enabled||isAdmin())))tab="account";
+  if(tab==="plans"&&!(CONF.pricing.enabled||isAdmin()))tab="account";
+  const v=tab==="workout"?viewWorkout():tab==="progress"?viewProgress():tab==="history"?viewHistory():tab==="admin"?viewAdmin():tab==="plans"?viewPlans():tab==="invite"?viewInvite():viewAccount();
+  const ann=CONF.general.announcement&&tab!=="admin"?'<section class="card announce" role="status">'+esc(CONF.general.announcement)+'</section>':'';
+  app.innerHTML=ann+(isGuest()&&!["account","plans"].includes(tab)?guestBanner(tab!=="workout"):'')+v;
   fitText(app);
   document.querySelectorAll("nav button").forEach(b=>{b.classList.toggle("on",b.dataset.tab===tab);b.setAttribute("aria-current",b.dataset.tab===tab?"page":"false")});
   ro.disconnect();const f=document.getElementById("fig");if(f){ro.observe(f);drawChart()}
@@ -785,11 +791,12 @@ app.addEventListener("click",e=>{
       toast("Workout discarded",()=>{if(!S.active){S.active=prev;markState();render()}});break}
     case"syncnow":setSync("saving");syncNow();break;
     case"signout":signOut();break;
+    case"shareinvite":shareInvite();break;
     case"guesttry":enterGuest();break;
     case"guestsignup":authOpen=true;authMode="signup";authMsg="";render();window.scrollTo(0,0);break;
     case"guestsignin":authOpen=true;authMode="signin";authMsg="";render();window.scrollTo(0,0);break;
     case"guestback":authOpen=false;authMsg="";render();window.scrollTo(0,0);break;
-    case"guestexit":try{localStorage.removeItem(GUEST)}catch(e){}user=null;S=blank();tab="workout";authOpen=false;authMode="signin";authMsg="";render();window.scrollTo(0,0);break;
+    case"guestexit":leaveGuest();break;
     case"logpast":
       if(S.active){go("workout");toast("Finish or discard your current workout first",null);break}
       logDate=dkey(new Date(Date.now()-864e5));go("workout");break;
@@ -853,13 +860,278 @@ function mergeGuest(){
 function handleSession(u){
   ready=true;
   if(!u){if(isGuest()){render();return}if(guestFlag()){enterGuest();return}if(user){user=null;S=blank()}render();return}
-  if(user&&user.id===u.id){if(!user.providers||!user.providers.length){user.providers=u.providers||[];user.phone=u.phone||user.phone}return}
-  user={id:u.id,email:u.email||"",name:u.name||pendingName||"",phone:u.phone||"",providers:u.providers||[]};pendingName="";
+  if(user&&user.id===u.id){if(!user.providers||!user.providers.length){user.providers=u.providers||[];user.phone=u.phone||user.phone}user.emailVerified=user.emailVerified||!!u.verified;return}
+  user={id:u.id,email:u.email||"",name:u.name||pendingName||"",phone:u.phone||"",providers:u.providers||[],emailVerified:!!u.verified};pendingName="";
   authOpen=false;
   saveLast();
   loadCache();mergeGuest();authMsg="";render();
   syncNow();
+  setTimeout(()=>touchProfile(u.created),1500);
 }
+/* ---------- App config: pricing, offers, coupons, referrals (edited in Admin) ---------- */
+const ADMIN_EMAIL="aggarwalvishal904@gmail.com";
+const isAdmin=()=>!!(user&&!user.guest&&String(user.email||"").toLowerCase()===ADMIN_EMAIL);
+const CONF_KEY="daanav-conf",REF_KEY="daanav-ref";
+const CUR_SYM={INR:"₹",USD:"$",EUR:"€",GBP:"£"};
+function defConf(){return{
+  pricing:{enabled:false,currency:"INR",trialDays:7,plans:[
+    {id:"monthly",name:"Monthly",price:199,months:1,active:true},
+    {id:"quarterly",name:"3 months",price:499,months:3,active:true},
+    {id:"yearly",name:"Yearly",price:1499,months:12,active:true}]},
+  offer:{active:false,percent:20,label:"Launch offer",endsOn:""},
+  referral:{enabled:false,rewardDays:30,friendPercent:10},
+  general:{guestMode:true,announcement:""}}}
+function mergeConf(d){
+  const b=defConf();if(!d||typeof d!=="object")return b;
+  for(const k of["pricing","offer","referral","general"])if(d[k]&&typeof d[k]==="object")Object.assign(b[k],d[k]);
+  const pl=d.pricing&&Array.isArray(d.pricing.plans)?d.pricing.plans:[];
+  b.pricing.plans=defConf().pricing.plans.map(p=>Object.assign(p,pl.find(x=>x&&x.id===p.id)||{}));
+  return b;
+}
+let CONF=defConf();
+try{CONF=mergeConf(JSON.parse(localStorage.getItem(CONF_KEY)||"null"))}catch(e){}
+try{const r=new URLSearchParams(location.search).get("ref");if(r){localStorage.setItem(REF_KEY,r.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,12));window.history.replaceState(null,"",location.pathname)}}catch(e){}
+const confRef=()=>FB.doc(fdb,"config","app");
+async function loadConf(){
+  if(!fdb||!navigator.onLine)return;
+  try{const s=await timeout(FB.getDoc(confRef()),10000);CONF=mergeConf(s.exists()?s.data():null);try{localStorage.setItem(CONF_KEY,JSON.stringify(CONF))}catch(e){}render()}catch(e){}
+}
+const offerLive=()=>!!(CONF.offer.active&&CONF.offer.percent>0&&(!CONF.offer.endsOn||CONF.offer.endsOn>=dkey(new Date())));
+const money=v=>(CUR_SYM[CONF.pricing.currency]||CONF.pricing.currency+" ")+(Math.round(v*100)/100).toLocaleString("en-IN");
+const refCode=()=>user&&!user.guest?String(user.id).replace(/[^A-Za-z0-9]/g,"").slice(0,6).toUpperCase():"";
+const inviteLink=()=>location.origin+location.pathname+"?ref="+refCode();
+function priceAfter(p,coupon){
+  let v=p.price;
+  if(offerLive())v=v*(1-CONF.offer.percent/100);
+  if(coupon)v=coupon.type==="flat"?v-coupon.value:v*(1-coupon.value/100);
+  return Math.max(0,Math.round(v));
+}
+/* A small profile doc per user, so the admin can see sign-ups and referrals. */
+async function touchProfile(created){
+  if(!fdb||!user||user.guest)return;
+  const d={name:user.name||"",email:user.email||"",refCode:refCode(),lastSeen:stamp()};
+  if(created)d.joined=created;
+  let ref="";try{ref=localStorage.getItem(REF_KEY)||""}catch(e){}
+  const fresh=created&&Date.now()-Date.parse(created)<30*60000;
+  if(ref&&ref!==refCode()&&fresh)d.referredBy=ref;
+  try{await timeout(FB.setDoc(FB.doc(fdb,"users",user.id),d,{merge:true}),10000);if(ref)localStorage.removeItem(REF_KEY)}catch(e){}
+}
+
+/* ---------- Side menu ---------- */
+const I_USER='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>';
+const I_SHIELD='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>';
+const I_GIFT='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="5" rx="1"/><path d="M5 13v8h14v-8M12 8v13M12 8c-2-4-6-4-6-1.5S10 8 12 8zm0 0c2-4 6-4 6-1.5S14 8 12 8z"/></svg>';
+const I_TAG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/></svg>';
+function drawerHtml(){
+  const g=isGuest(),nm=g?"Guest":(user.name||"Your account"),sub=g?"Trying without an account":(user.email||"");
+  const it=(id,icon,label,note)=>'<button class="dr-it'+(tab===id?' on':'')+'" data-dr="'+id+'">'+icon+'<span><b>'+label+'</b><small>'+note+'</small></span><i aria-hidden="true">›</i></button>';
+  let h='<div class="dr-head"><span class="av" aria-hidden="true">'+esc((nm.trim()[0]||"D").toUpperCase())+'</span><span class="dr-who"><b>'+esc(nm)+'</b><small>'+esc(sub)+'</small></span>'+
+    '<button class="dr-x" data-dr="close" aria-label="Close menu"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div><div class="dr-list">';
+  h+=it("account",I_USER,"Account",g?"Theme, sign up":"Profile, theme, password");
+  if(CONF.pricing.enabled||isAdmin())h+=it("plans",I_TAG,"Plans",CONF.pricing.enabled?(offerLive()?CONF.offer.percent+"% off · "+esc(CONF.offer.label):"Daanav Pro"):"Hidden from users (admin preview)");
+  if(!g&&(CONF.referral.enabled||isAdmin()))h+=it("invite",I_GIFT,"Invite friends",CONF.referral.enabled?"Earn "+pl(CONF.referral.rewardDays,"free day"):"Off for users (admin preview)");
+  if(isAdmin())h+=it("admin",I_SHIELD,"Admin","Pricing, offers, coupons, referrals, users");
+  h+='</div><div class="dr-foot">'+(g?'<button class="btn wide" data-dr="signup">Sign up free</button><button class="btn danger wide" data-dr="guestexit">'+SIGNOUT_ICON+'Leave trial mode</button>'
+    :'<button class="btn danger wide" data-dr="signout">'+SIGNOUT_ICON+'Sign out</button>')+'</div>';
+  return h;
+}
+const drawer=document.getElementById("drawer");
+function openDrawer(){if(!user)return;drawer.querySelector(".dr-panel").innerHTML=drawerHtml();drawer.hidden=false;void drawer.offsetWidth;drawer.classList.add("open");document.body.classList.add("drawer-open");
+  setTimeout(()=>{const x=drawer.querySelector(".dr-x");if(x)x.focus({preventScroll:true})},50)}
+function closeDrawer(){drawer.classList.remove("open");document.body.classList.remove("drawer-open");setTimeout(()=>{if(!drawer.classList.contains("open"))drawer.hidden=true},260)}
+function leaveGuest(){try{localStorage.removeItem(GUEST)}catch(e){}user=null;S=blank();tab="workout";authOpen=false;authMode="signin";authMsg="";render();window.scrollTo(0,0)}
+document.getElementById("menuBtn").addEventListener("click",openDrawer);
+drawer.addEventListener("click",e=>{
+  if(e.target===drawer){closeDrawer();return}
+  const b=e.target.closest("[data-dr]");if(!b)return;const a=b.dataset.dr;closeDrawer();
+  if(a==="close")return;
+  if(a==="signout")signOut();
+  else if(a==="guestexit")leaveGuest();
+  else if(a==="signup"){authOpen=true;authMode="signup";authMsg="";render();window.scrollTo(0,0)}
+  else{if(a==="admin"){admLoaded={}}go(a)}
+});
+addEventListener("keydown",e=>{if(e.key==="Escape"&&!drawer.hidden)closeDrawer()});
+
+/* ---------- Plans (what users see) ---------- */
+let couponIn="",couponOk=null,couponMsg="",couponBusy=false;
+function viewPlans(){
+  setHead(CONF.pricing.enabled?"Plans":"Plans · admin preview","Daanav Pro");
+  const plans=CONF.pricing.plans.filter(p=>p.active&&p.price>0);
+  let h=CONF.pricing.enabled?'':'<section class="card note-admin"><b>Only you can see this page.</b> Turn on “Show Plans to users” in Admin → Pricing when you’re ready.</section>';
+  if(offerLive())h+='<section class="card offerband"><b>'+esc(CONF.offer.label||"Special offer")+' · '+CONF.offer.percent+'% off</b>'+(CONF.offer.endsOn?'<small>Ends '+long(CONF.offer.endsOn)+'</small>':'')+'</section>';
+  h+='<section class="card"><h3>Choose a plan</h3>'+(CONF.pricing.trialDays>0?'<p class="sub">Start with a <b>'+pl(CONF.pricing.trialDays,"day")+' free trial</b>. Cancel any time.</p>':'')+'<div class="plans">';
+  if(!plans.length)h+='<p class="sub">No plans are available right now.</p>';
+  for(const p of plans){const now=priceAfter(p,couponOk),cut=now<p.price;
+    h+='<div class="plan'+(p.id==="yearly"?' best':'')+'">'+(p.id==="yearly"?'<span class="pbadge">Best value</span>':'')+'<b class="pn">'+esc(p.name)+'</b>'+
+      '<div class="pp"><span class="num">'+money(now)+'</span>'+(cut?'<s>'+money(p.price)+'</s>':'')+'</div>'+
+      '<small>'+(p.months>1?money(now/p.months)+' per month':'per month')+'</small></div>'}
+  h+='</div><form id="couponForm" class="coupon"><input type="text" id="couponCode" maxlength="20" autocapitalize="characters" placeholder="Coupon code" value="'+esc(couponIn)+'"><button class="btn" type="submit"'+(couponBusy?" disabled":"")+'>'+(couponBusy?"…":"Apply")+'</button></form>'+
+    '<p class="msg'+(couponOk?' okmsg':'')+'">'+esc(couponMsg)+'</p>'+
+    '<button class="btn wide" disabled style="margin-top:6px">Payments open soon</button><p class="sub" style="margin:8px 0 0;text-align:center">You won’t be charged yet. Everything stays free until payments open.</p></section>';
+  return h;
+}
+async function applyCoupon(code){
+  code=String(code||"").toUpperCase().replace(/[^A-Z0-9]/g,"");couponIn=code;couponOk=null;
+  if(!code){couponMsg="Enter a coupon code.";render();return}
+  if(isGuest()){couponMsg="Sign up free to use a coupon.";render();return}
+  if(!fdb||!navigator.onLine){couponMsg="You’re offline. Connect to the internet to check the coupon.";render();return}
+  couponBusy=true;couponMsg="";render();
+  try{const s=await timeout(FB.getDoc(FB.doc(fdb,"coupons",code)),10000);const c=s.exists()?s.data():null;
+    if(!c||!c.active)couponMsg="That coupon isn’t valid.";
+    else if(c.expiresOn&&c.expiresOn<dkey(new Date()))couponMsg="That coupon has expired.";
+    else if(c.maxUses&&(c.used||0)>=c.maxUses)couponMsg="That coupon has been fully used.";
+    else{couponOk={type:c.type==="flat"?"flat":"percent",value:+c.value||0};couponMsg="Coupon applied: "+(couponOk.type==="flat"?money(couponOk.value)+" off":couponOk.value+"% off")+"."}
+  }catch(e){couponMsg="Couldn’t check the coupon. Try again."}
+  couponBusy=false;render();
+}
+
+/* ---------- Invite friends ---------- */
+function viewInvite(){
+  setHead(CONF.referral.enabled?"Invite friends":"Invite · admin preview","Train together");
+  const r=CONF.referral;
+  let h=r.enabled?'':'<section class="card note-admin"><b>Only you can see this page.</b> Turn on referrals in Admin → Referrals to show it to users.</section>';
+  h+='<section class="card invite"><h3>Bring your gym buddies</h3><p class="sub">'+
+    (r.rewardDays>0?'You get <b>'+pl(r.rewardDays,"free day")+'</b> of Daanav Pro for every friend who signs up with your link'+(r.friendPercent>0?', and they get <b>'+r.friendPercent+'% off</b> their first plan':'')+'.':'Share your link so friends can track their workouts too.')+'</p>'+
+    '<div class="reflink"><span class="num">'+esc(inviteLink().replace(/^https?:\/\//,""))+'</span></div><p class="sub" style="margin:8px 0 0">Your code: <b class="num">'+refCode()+'</b></p>'+
+    '<button class="btn wide sharebtn" data-act="shareinvite" style="margin-top:12px">'+SHARE_ICON+'Share invite link</button><p class="msg">'+esc(inviteMsg)+'</p></section>';
+  inviteMsg="";
+  return h;
+}
+let inviteMsg="";
+function shareInvite(){
+  const r=CONF.referral,url=inviteLink();
+  const text="I track my gym progress on Daanav — sets, PRs and strength gains. Join me"+(r.friendPercent>0?" and get "+r.friendPercent+"% off":"")+": ";
+  if(navigator.share){navigator.share({title:"Daanav",text,url}).catch(()=>{});return}
+  try{navigator.clipboard.writeText(text+url).then(()=>{inviteMsg="Link copied. Paste it in WhatsApp or anywhere.";render()},()=>{inviteMsg=url;render()})}catch(e){inviteMsg=url;render()}
+}
+
+/* ---------- Admin ---------- */
+let admSub="pricing",admMsg={},admCoupons=null,admUsers=null,admLoaded={},admBusy=false,admQ="";
+const ADM_TABS=[["pricing","Pricing"],["offers","Offers"],["coupons","Coupons"],["referrals","Referrals"],["users","Users"],["general","General"]];
+const sw=(name,on,label,note)=>'<label class="swrow"><span><b>'+label+'</b>'+(note?'<small>'+note+'</small>':'')+'</span><span class="sw"><input type="checkbox" name="'+name+'"'+(on?" checked":"")+'><i></i></span></label>';
+const fnum=(name,val,label,attrs)=>'<label class="fl">'+label+'</label><input type="number" inputmode="decimal" name="'+name+'" value="'+esc(String(val))+'" '+(attrs||"")+'>';
+const amsg=k=>'<p class="msg'+(admMsg[k]&&admMsg[k].ok?' okmsg':'')+'">'+esc(admMsg[k]?admMsg[k].t:"")+'</p>';
+function admErr(e){const c=e&&e.code||"";return /permission/.test(c)?"Permission denied. Publish the new Firestore rules (see README) and make sure this email is verified.":"Couldn’t save: "+errText(e)}
+async function saveConf(next,k){
+  if(!navigator.onLine){admMsg[k]={t:"You’re offline. Connect to save."};render();return}
+  admBusy=true;render();
+  try{await timeout(FB.setDoc(confRef(),Object.assign(clean(next),{updatedAt:stamp(),updatedBy:user.email})),12000);CONF=mergeConf(next);try{localStorage.setItem(CONF_KEY,JSON.stringify(CONF))}catch(e){}admMsg[k]={t:"Saved. Users get this the next time they open the app.",ok:true}}
+  catch(e){admMsg[k]={t:admErr(e)}}
+  admBusy=false;render();
+}
+async function admLoad(what){
+  if(admLoaded[what]||!fdb)return;admLoaded[what]=1;
+  try{const qs=await timeout(FB.getDocs(FB.collection(fdb,what)),12000);const rows=qs.docs.map(d=>Object.assign({id:d.id},d.data()));
+    if(what==="coupons")admCoupons=rows.sort((a,b)=>a.id.localeCompare(b.id));else admUsers=rows;}
+  catch(e){admMsg[what]={t:admErr(e).replace("Couldn’t save","Couldn’t load")};if(what==="coupons")admCoupons=[];else admUsers=[]}
+  if(tab==="admin")render();
+}
+const tsDate=v=>{if(!v)return"";const ms=typeof v==="string"?Date.parse(v):v.toMillis?v.toMillis():v.seconds?v.seconds*1000:+v;return ms?short(dkey(new Date(ms))):""};
+function viewAdmin(){
+  setHead("Admin","Control room");
+  const pw=(user.providers||[]).includes("password")&&!(user.providers||[]).includes("google.com");
+  if(pw&&!user.emailVerified)return '<section class="card"><h3>Verify your email to unlock Admin</h3><p class="sub">For security, admin changes only work from a verified email. We’ll send a link to <b>'+esc(user.email)+'</b>. Or sign in with Google using this email instead.</p>'+
+    '<button class="btn wide" data-adm="verify">Send verification email</button><button class="btn ghost wide" data-adm="verified" style="margin-top:8px">I’ve verified it</button>'+amsg("verify")+'</section>';
+  let h='<div class="admtabs" role="tablist">'+ADM_TABS.map(([id,l])=>'<button class="chip'+(admSub===id?' on':'')+'" role="tab" aria-selected="'+(admSub===id)+'" data-admsub="'+id+'">'+l+'</button>').join("")+'</div>';
+  const P=CONF.pricing,O=CONF.offer,R=CONF.referral,G=CONF.general,dis=admBusy?" disabled":"";
+  const saveBtn=lbl=>'<button class="btn wide" type="submit" style="margin-top:14px"'+dis+'>'+(admBusy?"Saving…":lbl||"Save")+'</button>';
+  if(admSub==="pricing"){
+    h+='<section class="card"><h3>Pricing</h3><form id="admPricing">'+sw("enabled",P.enabled,"Show Plans to users","Adds “Plans” to everyone’s menu. Payments aren’t connected yet, so nobody is charged.")+
+      '<div class="row2"><div><label class="fl">Currency</label><select name="currency">'+Object.keys(CUR_SYM).map(c=>'<option'+(c===P.currency?" selected":"")+'>'+c+'</option>').join("")+'</select></div><div>'+fnum("trialDays",P.trialDays,"Free trial (days)",'min="0" max="90" step="1"')+'</div></div>'+
+      '<h4 class="sh">Plans</h4>'+P.plans.map(p=>'<div class="planrow"><span class="sw"><input type="checkbox" name="on_'+p.id+'"'+(p.active?" checked":"")+' aria-label="'+esc(p.name)+' on"><i></i></span>'+
+        '<input type="text" name="name_'+p.id+'" maxlength="24" value="'+esc(p.name)+'" aria-label="Plan name"><span class="cur">'+(CUR_SYM[P.currency]||"")+'</span><input type="number" inputmode="decimal" name="price_'+p.id+'" min="0" step="1" value="'+p.price+'" aria-label="'+esc(p.name)+' price"><small>'+p.months+' mo</small></div>').join("")+
+      saveBtn("Save pricing")+amsg("pricing")+'</form></section>';
+    h+='<section class="card"><h3>Preview</h3><p class="sub">What users see on the Plans page right now'+(offerLive()?', with the '+O.percent+'% offer applied':'')+'.</p><div class="plans">'+P.plans.filter(p=>p.active).map(p=>'<div class="plan"><b class="pn">'+esc(p.name)+'</b><div class="pp"><span class="num">'+money(priceAfter(p))+'</span>'+(priceAfter(p)<p.price?'<s>'+money(p.price)+'</s>':'')+'</div></div>').join("")+'</div><button class="btn ghost wide" data-tab-go="plans" style="margin-top:12px">Open Plans page</button></section>';
+  }else if(admSub==="offers"){
+    h+='<section class="card"><h3>Sitewide offer</h3><p class="sub">A discount on every plan, shown as a banner on the Plans page. Coupons apply on top of it.</p><form id="admOffer">'+sw("active",O.active,"Offer is on","")+
+      '<label class="fl">Offer name</label><input type="text" name="label" maxlength="40" value="'+esc(O.label)+'" placeholder="e.g. Diwali offer">'+
+      '<div class="row2"><div>'+fnum("percent",O.percent,"Discount (%)",'min="1" max="90" step="1"')+'</div><div><label class="fl">Ends on (optional)</label><input type="date" name="endsOn" value="'+esc(O.endsOn)+'"></div></div>'+
+      saveBtn("Save offer")+amsg("offers")+'</form><p class="sub" style="margin:10px 0 0">Status: <b>'+(offerLive()?"Live":O.active?"Ended":"Off")+'</b></p></section>';
+  }else if(admSub==="coupons"){
+    admLoad("coupons");
+    h+='<section class="card"><h3>New coupon</h3><form id="admCoupon"><label class="fl">Code</label><input type="text" name="code" maxlength="20" autocapitalize="characters" placeholder="e.g. FIT50" required>'+
+      '<div class="row2"><div><label class="fl">Type</label><select name="type"><option value="percent">% off</option><option value="flat">Amount off</option></select></div><div>'+fnum("value","","Value",'min="1" step="1" required')+'</div></div>'+
+      '<div class="row2"><div>'+fnum("maxUses","","Max uses (blank = no limit)",'min="1" step="1"')+'</div><div><label class="fl">Expires on (optional)</label><input type="date" name="expiresOn"></div></div>'+
+      '<label class="fl">Note (only you see this)</label><input type="text" name="note" maxlength="60" placeholder="e.g. For my gym batch">'+saveBtn("Create coupon")+amsg("coupons")+'</form></section>';
+    h+='<section class="card"><h3>Coupons'+(admCoupons?' <small class="mute">('+admCoupons.length+')</small>':'')+'</h3>';
+    if(!admCoupons)h+='<p class="sub">Loading…</p>';
+    else if(!admCoupons.length)h+='<p class="sub">No coupons yet.</p>';
+    else h+='<div class="clist">'+admCoupons.map(c=>{const exp=c.expiresOn&&c.expiresOn<dkey(new Date());
+      return '<div class="crow'+(c.active&&!exp?'':' off')+'"><div><b class="num">'+esc(c.id)+'</b><small>'+(c.type==="flat"?money(c.value)+" off":c.value+"% off")+' · used '+(c.used||0)+(c.maxUses?'/'+c.maxUses:'')+(c.expiresOn?' · '+(exp?'expired ':'until ')+short(c.expiresOn):'')+(c.note?' · '+esc(c.note):'')+'</small></div>'+
+        '<span class="sw"><input type="checkbox" data-adm-ctoggle="'+esc(c.id)+'"'+(c.active?" checked":"")+' aria-label="'+esc(c.id)+' active"><i></i></span><button class="cdel" data-adm-cdel="'+esc(c.id)+'" aria-label="Delete '+esc(c.id)+'"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button></div>'}).join("")+'</div>';
+    h+='<p class="sub" style="margin:10px 0 0">“Used” counts go up once payments are connected.</p></section>';
+  }else if(admSub==="referrals"){
+    admLoad("users");
+    h+='<section class="card"><h3>Referrals</h3><form id="admRef">'+sw("enabled",R.enabled,"Referrals are on","Adds “Invite friends” to everyone’s menu with their own link.")+
+      '<div class="row2"><div>'+fnum("rewardDays",R.rewardDays,"Reward for inviter (free days)",'min="0" max="365" step="1"')+'</div><div>'+fnum("friendPercent",R.friendPercent,"Friend’s discount (%)",'min="0" max="90" step="1"')+'</div></div>'+
+      saveBtn("Save referrals")+amsg("referrals")+'</form><p class="sub" style="margin:10px 0 0">Rewards are recorded now and applied once payments are connected.</p></section>';
+    if(admUsers){const by={};for(const u of admUsers)if(u.referredBy)by[u.referredBy]=(by[u.referredBy]||0)+1;
+      const top=Object.entries(by).sort((a,b)=>b[1]-a[1]),name=c=>{const u=admUsers.find(x=>x.refCode===c);return u?(u.name||u.email):"Unknown"};
+      h+='<section class="card"><h3>Referral stats</h3><div class="tiles">'+tile("Referred sign-ups",Object.values(by).reduce((a,b)=>a+b,0))+tile("Active referrers",top.length)+'</div>'+
+        (top.length?'<table class="stack" style="margin-top:10px"><thead><tr><th>Referrer</th><th class="r">Code</th><th class="r">Sign-ups</th></tr></thead><tbody>'+top.slice(0,20).map(([c,n])=>'<tr><td>'+esc(name(c))+'</td><td class="r num" data-l="Code">'+esc(c)+'</td><td class="r num" data-l="Sign-ups">'+n+'</td></tr>').join("")+'</tbody></table>':'<p class="sub" style="margin-top:10px">No referred sign-ups yet.</p>')+amsg("users")+'</section>'}
+    else h+='<section class="card"><p class="sub">Loading stats…</p></section>';
+  }else if(admSub==="users"){
+    admLoad("users");
+    if(!admUsers)h+='<section class="card"><p class="sub">Loading users…</p>'+amsg("users")+'</section>';
+    else{const wk=Date.now()-7*864e5,ms=v=>!v?0:typeof v==="string"?Date.parse(v):v.toMillis?v.toMillis():v.seconds?v.seconds*1000:+v;
+      const q=admQ.toLowerCase(),list=admUsers.filter(u=>!q||(u.name||"").toLowerCase().includes(q)||(u.email||"").toLowerCase().includes(q)).sort((a,b)=>ms(b.joined)-ms(a.joined));
+      h+='<section class="card"><div class="tiles">'+tile("Users",admUsers.length)+tile("Active this week",admUsers.filter(u=>ms(u.lastSeen)>wk).length)+tile("New this week",admUsers.filter(u=>ms(u.joined)>wk).length)+tile("Referred",admUsers.filter(u=>u.referredBy).length)+'</div></section>'+
+        '<section class="card"><input type="text" id="admQ" placeholder="Search name or email" value="'+esc(admQ)+'"><div class="ulist">'+(list.length?list.slice(0,200).map(u=>'<div class="urow"><span class="av sm">'+esc(((u.name||u.email||"?").trim()[0]||"?").toUpperCase())+'</span><div><b>'+esc(u.name||"No name")+'</b><small>'+esc(u.email||"")+'</small></div><small class="r">Joined '+(tsDate(u.joined)||"–")+'<br>Seen '+(tsDate(u.lastSeen)||"–")+'</small></div>').join(""):'<p class="sub">No users match.</p>')+'</div>'+
+        '<p class="sub" style="margin:10px 0 0">Users appear here after they open the updated app once. Guests (no account) aren’t listed.</p>'+amsg("users")+'</section>'}
+  }else{
+    h+='<section class="card"><h3>General</h3><form id="admGen">'+sw("guestMode",G.guestMode,"Allow trying without an account","Shows “Try without signing up” on the sign-in screen.")+
+      '<label class="fl">Announcement banner (optional)</label><textarea name="announcement" maxlength="160" rows="3" placeholder="e.g. New: share your workouts to Instagram!">'+esc(G.announcement)+'</textarea><small class="mute">Shown at the top of the app for everyone. Leave empty to hide.</small>'+
+      saveBtn("Save")+amsg("general")+'</form></section>'+
+      '<section class="card"><h3>Admin access</h3><p class="sub">Only <b>'+ADMIN_EMAIL+'</b> can open Admin. This is set in the app code and enforced by the Firestore rules.</p></section>';
+  }
+  admMsg={};
+  return h;
+}
+const fv=(f,n)=>f.elements[n]?f.elements[n].value:"";
+const fn=(f,n,lo,hi)=>{const v=parseFloat(fv(f,n));return isFinite(v)?Math.max(lo,Math.min(hi,v)):lo};
+app.addEventListener("submit",e=>{
+  const f=e.target,id=f.id;
+  if(id==="couponForm"){e.preventDefault();applyCoupon(fv(f,"couponCode")||document.getElementById("couponCode").value);return}
+  if(!/^adm/.test(id)||!isAdmin())return;
+  e.preventDefault();
+  const C=clean(CONF);
+  if(id==="admPricing"){C.pricing.enabled=f.elements.enabled.checked;C.pricing.currency=fv(f,"currency");C.pricing.trialDays=Math.round(fn(f,"trialDays",0,90));
+    C.pricing.plans=C.pricing.plans.map(p=>Object.assign(p,{active:f.elements["on_"+p.id].checked,name:(fv(f,"name_"+p.id).trim()||p.name).slice(0,24),price:Math.round(fn(f,"price_"+p.id,0,1e6))}));saveConf(C,"pricing")}
+  else if(id==="admOffer"){C.offer={active:f.elements.active.checked,label:fv(f,"label").trim().slice(0,40),percent:Math.round(fn(f,"percent",1,90)),endsOn:fv(f,"endsOn")};saveConf(C,"offers")}
+  else if(id==="admRef"){C.referral={enabled:f.elements.enabled.checked,rewardDays:Math.round(fn(f,"rewardDays",0,365)),friendPercent:Math.round(fn(f,"friendPercent",0,90))};saveConf(C,"referrals")}
+  else if(id==="admGen"){C.general={guestMode:f.elements.guestMode.checked,announcement:fv(f,"announcement").trim().slice(0,160)};saveConf(C,"general")}
+  else if(id==="admCoupon")createCoupon(f);
+});
+async function createCoupon(f){
+  const code=fv(f,"code").toUpperCase().replace(/[^A-Z0-9]/g,""),type=fv(f,"type")==="flat"?"flat":"percent",value=Math.round(fn(f,"value",0,type==="flat"?1e6:100));
+  if(code.length<3){admMsg.coupons={t:"Use at least 3 letters or numbers for the code."};render();return}
+  if(!(value>0)){admMsg.coupons={t:"Enter a value above 0."};render();return}
+  if(admCoupons&&admCoupons.some(c=>c.id===code)){admMsg.coupons={t:code+" already exists."};render();return}
+  const mu=parseInt(fv(f,"maxUses"),10),c={code,type,value,maxUses:mu>0?mu:0,used:0,expiresOn:fv(f,"expiresOn")||"",note:fv(f,"note").trim().slice(0,60),active:true,createdAt:stamp()};
+  admBusy=true;render();
+  try{await timeout(FB.setDoc(FB.doc(fdb,"coupons",code),c),12000);admCoupons=(admCoupons||[]).concat([Object.assign({id:code},c)]).sort((a,b)=>a.id.localeCompare(b.id));admMsg.coupons={t:code+" created.",ok:true}}
+  catch(e){admMsg.coupons={t:admErr(e)}}
+  admBusy=false;render();
+}
+app.addEventListener("click",async e=>{
+  const b=e.target.closest("[data-admsub],[data-adm],[data-adm-cdel]");if(!b)return;
+  if(b.dataset.admsub){admSub=b.dataset.admsub;render();return}
+  if(b.dataset.admCdel){if(!isAdmin())return;const id=b.dataset.admCdel,c=admCoupons.find(x=>x.id===id);
+    try{await timeout(FB.deleteDoc(FB.doc(fdb,"coupons",id)),12000);admCoupons=admCoupons.filter(x=>x.id!==id);render();
+      toast(id+" deleted",async()=>{const d=Object.assign({},c);delete d.id;try{await FB.setDoc(FB.doc(fdb,"coupons",id),d);admCoupons=admCoupons.concat([c]).sort((a,b)=>a.id.localeCompare(b.id));render()}catch(e2){}})}
+    catch(err){admMsg.coupons={t:admErr(err)};render()}return}
+  const a=b.dataset.adm,u=fbAuth&&fbAuth.currentUser;
+  if(a==="verify"){try{await FB.sendEmailVerification(u);admMsg.verify={t:"Link sent to "+user.email+". Open it, then tap “I’ve verified it”.",ok:true}}catch(err){admMsg.verify={t:friendly(err)}}render()}
+  if(a==="verified"){try{await u.reload();await u.getIdToken(true);user.emailVerified=!!fbAuth.currentUser.emailVerified;if(!user.emailVerified)admMsg.verify={t:"Not verified yet. Open the link in the email first."}}catch(err){admMsg.verify={t:friendly(err)}}render()}
+});
+app.addEventListener("change",async e=>{
+  const t=e.target;if(!t.dataset||!t.dataset.admCtoggle||!isAdmin())return;
+  const id=t.dataset.admCtoggle,c=admCoupons.find(x=>x.id===id);if(!c)return;
+  try{await timeout(FB.setDoc(FB.doc(fdb,"coupons",id),{active:t.checked},{merge:true}),12000);c.active=t.checked}catch(err){t.checked=!t.checked;admMsg.coupons={t:admErr(err)}}
+  render();
+});
+app.addEventListener("input",e=>{if(e.target.id==="admQ"){admQ=e.target.value;const pos=e.target.selectionStart;render();const q=document.getElementById("admQ");if(q){q.focus();try{q.setSelectionRange(pos,pos)}catch(x){}}}});
+
 const FIREBASE_SDK="12.19.0";
 async function boot(){
   if(guestFlag()){ready=true;enterGuest()}
@@ -879,7 +1151,8 @@ async function boot(){
   const fapp=FB.initializeApp(fc);
   fbAuth=FB.getAuth(fapp);fdb=FB.getFirestore(fapp);
   render();
-  FB.onAuthStateChanged(fbAuth,u=>setTimeout(()=>handleSession(u?{id:u.uid,email:u.email||"",name:u.displayName||"",phone:u.phoneNumber||"",providers:(u.providerData||[]).map(p=>p.providerId)}:null),0));
+  FB.onAuthStateChanged(fbAuth,u=>setTimeout(()=>handleSession(u?{id:u.uid,email:u.email||"",name:u.displayName||"",phone:u.phoneNumber||"",providers:(u.providerData||[]).map(p=>p.providerId),verified:!!u.emailVerified,created:u.metadata&&u.metadata.creationTime||""}:null),0));
+  loadConf();
   addEventListener("online",()=>{setSync("saving");syncNow()});
   addEventListener("offline",()=>setSync("offline"));
   document.addEventListener("visibilitychange",()=>{if(!document.hidden&&user)syncNow()});

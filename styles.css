@@ -501,3 +501,27 @@ textarea{padding:12px 14px;resize:vertical;font:inherit;font-size:16px;margin-bo
 .urow b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .urow small{display:block;color:var(--mute);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .urow small.r{text-align:right;flex:none;font-size:12px;line-height:1.4}
+
+/* ---------- Consistency calendar ---------- */
+.tiles.c3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.calnav{display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px}
+.calnav b{font:var(--dw) 19px/1 var(--display);font-stretch:var(--ds);text-transform:var(--case)}
+.calnav button{width:44px;height:44px;border-radius:12px;background:var(--soft);font-size:24px;line-height:1;color:var(--ink)}
+.calnav button:disabled{opacity:.3}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.cal>b{text-align:center;font-size:12px;color:var(--mute);font-weight:700;padding-bottom:2px}
+.cal>span,.cal>button{aspect-ratio:1;border-radius:12px;display:grid;place-items:center;font-size:14px;font-weight:600;color:var(--mute);background:var(--soft);min-height:0;padding:0}
+.cal>span.pad{background:none}
+.cal em{font-style:normal}
+.cal .fut{opacity:.4}
+.cal .on{background:var(--accent);color:var(--accentInk)}
+.cal .on i{font-style:normal;font-weight:900;font-size:17px}
+[data-theme=chalk] .cal .on{background:#0B0B0B;color:#D4FF3A}
+.cal .today{box-shadow:inset 0 0 0 2px var(--ink)}
+.cal .on.today{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--pr)}
+/* celebration streak line */
+.cele .streak{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+.cele .streak span{background:var(--soft);color:var(--ink);border-radius:999px;padding:6px 12px;font-size:14px;font-weight:600}
+.cele .streak b{font:var(--dw) 17px/1 var(--display);color:var(--accent)}
+[data-theme=chalk] .cele .streak span{background:#0B0B0B;color:#fff}
+[data-theme=chalk] .cele .streak b{color:#D4FF3A}

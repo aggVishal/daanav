@@ -243,6 +243,39 @@ function prsIn(key){
     for(const e of w.ex)for(const s of e.sets){const b=best[e.name]||0;if(inP&&b>0&&s.w>b)hit.add(e.name);if(s.w>b)best[e.name]=s.w}}
   return hit.size;
 }
+/* ---------- Consistency: calendar + week streak ---------- */
+const trainedDays=()=>new Set(S.workouts.map(w=>w.date));
+function weekStreak(){
+  const wk=new Set(S.workouts.map(w=>weekOf(w.date))),d=parse(weekOf(dkey(new Date())));
+  if(!wk.has(dkey(d)))d.setDate(d.getDate()-7);
+  let n=0;while(wk.has(dkey(d))){n++;d.setDate(d.getDate()-7)}return n;
+}
+function bestWeekStreak(){
+  const ws=[...new Set(S.workouts.map(w=>weekOf(w.date)))].sort();let best=0,run=0,prev=null;
+  for(const k of ws){let nx=null;if(prev){const p=parse(prev);p.setDate(p.getDate()+7);nx=dkey(p)}run=nx===k?run+1:1;best=Math.max(best,run);prev=k}
+  return best;
+}
+const monthDays=ym=>{let n=0;trainedDays().forEach(k=>{if(k.slice(0,7)===ym)n++});return n};
+const monthName=(ym,o)=>{const[y,m]=ym.split("-").map(Number);return new Date(y,m-1,1).toLocaleDateString(undefined,o||{month:"long",year:"numeric"})};
+function calHtml(ym,small){
+  const[y,m]=ym.split("-").map(Number),lead=(new Date(y,m-1,1).getDay()+6)%7,n=new Date(y,m,0).getDate(),t=trainedDays(),today=dkey(new Date());
+  let h='<div class="cal'+(small?' sm':'')+'" role="grid" aria-label="'+esc(monthName(ym))+'">'+["M","T","W","T","F","S","S"].map(l=>'<b aria-hidden="true">'+l+'</b>').join("");
+  for(let i=0;i<lead;i++)h+='<span class="pad"></span>';
+  for(let d=1;d<=n;d++){const k=ym+"-"+pad(d),on=t.has(k),tag=on&&!small?"button":"span";
+    h+='<'+tag+(on&&!small?' data-calday="'+k+'"':'')+' class="'+[on?"on":"",k===today?"today":"",k>today?"fut":""].join(" ").trim()+'" aria-label="'+esc(short(k))+(on?', trained':'')+'">'+(on?'<i aria-hidden="true">✓</i>':'<em>'+d+'</em>')+'</'+tag+'>'}
+  return h+'</div>';
+}
+let calYm=null;
+function consistencyCard(){
+  const cur=monthOf(dkey(new Date()));if(!calYm||calYm>cur)calYm=cur;
+  const first=S.workouts.length?sorted()[0].date.slice(0,7):cur,st=weekStreak(),md=monthDays(calYm);
+  return '<section class="card"><h3>Consistency</h3><div class="tiles c3">'+
+    tile("Week streak",st,'<em>'+(st?"in a row":"train to start")+'</em>')+
+    tile("Days trained",md,'<em>'+(calYm===cur?"this month":"in "+monthName(calYm,{month:"short"}))+'</em>')+
+    tile("Best streak",bestWeekStreak(),'<em>weeks</em>')+'</div>'+
+    '<div class="calnav"><button data-calm="-1" aria-label="Previous month"'+(calYm<=first?" disabled":"")+'>‹</button><b>'+esc(monthName(calYm))+'</b><button data-calm="1" aria-label="Next month"'+(calYm>=cur?" disabled":"")+'>›</button></div>'+
+    calHtml(calYm)+'<p class="sub" style="margin:10px 0 0">A week counts toward your streak if you train at least once in it. Tap a ticked day to open that workout.</p></section>';
+}
 /* Getting stronger: best estimated 1RM (or reps, for bodyweight) this period vs everything before it. */
 function strongerCard(cur,c){
   const before={},now={};
@@ -284,6 +317,7 @@ function viewProgress(){
   h+='<section class="card"><h3>'+(period==="week"?"This week":"This month")+'</h3><div class="tiles">'+
     tile("New PRs",prsIn(cur),'<em>heavier than ever before</em>')+tile("Workouts",c.n,chip(ch(c.n,p.n),lbl))+
     tile("Sets",c.sets,chip(ch(c.sets,p.sets),lbl))+tile("Volume (kg)",fmt(c.vol),'<em class="note">weight × reps</em>'+chip(ch(c.vol,p.vol),lbl))+'</div></section>';
+  h+=consistencyCard();
   h+=strongerCard(cur,c);
   const names=[...new Set(sorted().flatMap(w=>w.ex.filter(e=>e.sets.length).map(e=>e.name)))].sort();
   if(!progEx||!names.includes(progEx)){const last=sorted().pop();progEx=last&&last.ex.length?last.ex[0].name:names[0]}
@@ -640,7 +674,7 @@ function showCele(){
     const c=["#0B0B0B","#FFFFFF","#0B0B0B","#55534C"];
     for(let i=0;i<30;i++)fx+='<span class="conf" style="left:'+((i*41)%100)+'%;background:'+c[i%4]+';animation-delay:'+(.5+((i*29)%80)/100)+'s;border-radius:'+(i%3?"2px":"50%")+'"></span>';
   }
-  const dots=t==="chalk"?'<div class="dots">'+["M","T","W","T","F","S","S"].map((l,i)=>'<i class="'+(d.days[i]?"on":"")+'" style="animation-delay:'+(1.5+i*.08)+'s">'+(d.days[i]?"✓":l)+'</i>').join("")+'</div>':"";
+  const dots='<div class="dots">'+["M","T","W","T","F","S","S"].map((l,i)=>'<i class="'+(d.days[i]?"on":"")+'" style="animation-delay:'+(1.5+i*.08)+'s">'+(d.days[i]?"✓":l)+'</i>').join("")+'</div>';
   el.innerHTML='<div class="fx" aria-hidden="true">'+fx+'</div><div class="wrap"><div class="hero" aria-hidden="true">'+hero+'</div>'+
     '<div class="kick">'+esc(H.kick)+'</div><h2 id="celeTitle">'+H.h+'</h2><p class="say up1 d1">'+esc(msg)+'</p>'+
     '<div class="stats"><div class="stat up1 d2"><span>Total lifted</span><b><span data-to="'+d.vol+'">0</span><small> kg</small></b></div>'+
@@ -648,7 +682,7 @@ function showCele(){
     '<div class="stat up1 d3"><span>Time</span><b><span data-to="'+d.mins+'">0</span><small> min</small></b></div>'+
     '<div class="stat hot up1 d3"><span>New PRs</span><b data-to="'+d.prs.length+'">0</b></div></div>'+
     (d.prs.length?'<div class="prs up1 d4">'+d.prs.slice(0,3).map(p=>'<div><span>'+esc(p.name)+'</span><b>'+wl(p.w)+' × '+p.r+' · +'+kg(p.delta)+' kg</b></div>').join("")+'</div>':'')+
-    '<div class="week up1 d5">'+(d.week===1?"1st":d.week===2?"2nd":d.week===3?"3rd":d.week+"th")+' workout '+(d.past&&weekOf(d.date)!==weekOf(dkey(new Date()))?"that week":"this week")+dots+'</div>'+
+    '<div class="week up1 d5">'+(d.week===1?"1st":d.week===2?"2nd":d.week===3?"3rd":d.week+"th")+' workout '+(d.past&&weekOf(d.date)!==weekOf(dkey(new Date()))?"that week":"this week")+dots+'<div class="streak"><span><b>'+d.streak+'</b> week streak</span><span><b>'+d.monthDays+'</b> '+(d.monthDays===1?"day":"days")+' in '+esc(monthName(monthOf(d.date),{month:"long"}))+'</span></div></div>'+
     '<div class="acts up1 d5"><button class="btn wide sharebtn" data-cele="share">'+SHARE_ICON+'Share to your story</button><button class="btn wide ghostc" data-cele="done">Done</button><button class="link" data-cele="replay">Replay celebration</button></div></div>';
   el.hidden=false;document.body.classList.add("celebrating");el.scrollTop=0;
   el.setAttribute("aria-labelledby","celeTitle");
@@ -693,26 +727,44 @@ async function drawStory(d){
   c.fillStyle=t==="chalk"?P.ink:P.hot;c.font="800 "+BODY.replace("{s}",36);
   const kick=(d.parts.join(" + ")+" DAY").toUpperCase();fitFont(c,kick,"800 "+BODY,36,IW);c.fillText(kick,X,430);
   c.fillStyle=P.ink;
-  const hs=Math.min(fitFont(c,P.h[0],P.disp,t==="iron"?170:190,IW),fitFont(c,P.h[1],P.disp,t==="iron"?170:190,IW));c.font=P.disp.replace("{s}",hs);
+  const hs=Math.min(fitFont(c,P.h[0],P.disp,t==="iron"?140:150,IW),fitFont(c,P.h[1],P.disp,t==="iron"?140:150,IW));c.font=P.disp.replace("{s}",hs);
   c.fillText(P.h[0],X,430+hs*.98);c.fillStyle=t==="chalk"?P.ink:P.acc;c.fillText(P.h[1],X,430+hs*1.9);
-  // stats grid
-  let y=430+hs*1.9+70;const cw=(IW-30)/2,ch=200;
-  const stats=[["TOTAL LIFTED",fmt(d.vol),"kg"],["SETS",String(d.sets),""],["TIME",String(d.mins),"min"],["NEW PRs",String(d.prs.length),""]];
-  stats.forEach((st,i)=>{const sx=X+(i%2)*(cw+30),sy=y+Math.floor(i/2)*(ch+30),hot=i===3&&d.prs.length;
-    c.fillStyle=hot?P.hot:P.card;rrect(c,sx,sy,cw,ch,32);c.fill();
-    c.fillStyle=hot?P.hotInk:P.mute;c.font="700 "+BODY.replace("{s}",28);c.fillText(st[0],sx+34,sy+56);
-    c.fillStyle=hot?P.hotInk:P.ink;const ns=fitFont(c,st[1],P.disp,104,cw-68-(st[2]?c.measureText(" "+st[2]).width+40:0));c.font=P.disp.replace("{s}",ns);c.fillText(st[1],sx+34,sy+166);
-    if(st[2]){const nw=c.measureText(st[1]).width;c.font="700 "+BODY.replace("{s}",34);c.fillStyle=hot?P.hotInk:P.mute;c.fillText(st[2],sx+34+nw+12,sy+166)}});
-  y+=ch*2+30+100;
+  // stats: one row of four
+  let y=430+hs*1.9+60;const gap=20,cw=(IW-gap*3)/4,ch=170;
+  const stats=[["LIFTED",fmt(d.vol),"kg"],["SETS",String(d.sets),""],["TIME",String(d.mins),"min"],["PRs",String(d.prs.length),""]];
+  stats.forEach((st,i)=>{const sx=X+i*(cw+gap),hot=i===3&&d.prs.length;
+    c.fillStyle=hot?P.hot:P.card;rrect(c,sx,y,cw,ch,28);c.fill();
+    c.fillStyle=hot?P.hotInk:P.mute;c.font="700 "+BODY.replace("{s}",24);c.fillText(st[0],sx+24,y+46);
+    c.fillStyle=hot?P.hotInk:P.ink;const ns=fitFont(c,st[1],P.disp,80,cw-48);c.font=P.disp.replace("{s}",ns);c.fillText(st[1],sx+24,y+126);
+    if(st[2]){c.fillStyle=hot?P.hotInk:P.mute;c.font="700 "+BODY.replace("{s}",24);c.fillText(st[2],sx+24,y+156)}});
+  y+=ch+30;
+  // consistency: this month's calendar + week streak
+  const cy=y,chh=410;c.fillStyle=P.card;rrect(c,X,cy,IW,chh,32);c.fill();
+  const ym=monthOf(d.date),[yy,mm]=ym.split("-").map(Number),lead=(new Date(yy,mm-1,1).getDay()+6)%7,nd=new Date(yy,mm,0).getDate(),on=new Set(d.cal||[]),pitch=52,cs=44,gx=X+34,gy=cy+78;
+  c.textAlign="center";c.fillStyle=P.mute;c.font="700 "+BODY.replace("{s}",24);
+  ["M","T","W","T","F","S","S"].forEach((l,i)=>c.fillText(l,gx+i*pitch+cs/2,cy+56));
+  for(let dd=1;dd<=nd;dd++){const ix=(lead+dd-1)%7,iy=Math.floor((lead+dd-1)/7),cx=gx+ix*pitch,cyy=gy+iy*pitch,isOn=on.has(dd),isDay=dd===+d.date.slice(8);
+    if(isOn){c.fillStyle=t==="chalk"?"#0B0B0B":P.acc;rrect(c,cx,cyy,cs,cs,12);c.fill();
+      c.strokeStyle=t==="chalk"?"#D4FF3A":P.accInk;c.lineWidth=5;c.lineCap="round";c.lineJoin="round";c.beginPath();c.moveTo(cx+12,cyy+23);c.lineTo(cx+19,cyy+30);c.lineTo(cx+33,cyy+14);c.stroke()}
+    else{c.strokeStyle=P.line;c.lineWidth=2;rrect(c,cx+1,cyy+1,cs-2,cs-2,12);c.stroke();c.fillStyle=P.mute;c.font="600 "+BODY.replace("{s}",20);c.fillText(String(dd),cx+cs/2,cyy+29)}
+    if(isDay){c.strokeStyle=P.hot;c.lineWidth=4;rrect(c,cx-5,cyy-5,cs+10,cs+10,15);c.stroke()}}
+  c.textAlign="left";
+  const rx=gx+7*pitch+40,rw=X+IW-30-rx;
+  c.fillStyle=P.mute;c.font="700 "+BODY.replace("{s}",24);c.fillText("CONSISTENCY",rx,cy+80);
+  const sN=String(d.streak||1);c.fillStyle=t==="chalk"?P.ink:P.acc;const sz=fitFont(c,sN,P.disp,130,rw*0.5);c.font=P.disp.replace("{s}",sz);c.fillText(sN,rx,cy+215);
+  const sw2=c.measureText(sN).width;c.fillStyle=P.ink;c.font="800 "+BODY.replace("{s}",30);c.fillText((d.streak||1)===1?"WEEK":"WEEKS",rx+sw2+16,cy+175);c.fillText("STREAK",rx+sw2+16,cy+213);
+  c.fillStyle=P.ink;fitFont(c,pl(d.monthDays||1,"day")+" trained","800 "+BODY,38,rw);c.fillText(pl(d.monthDays||1,"day")+" trained",rx,cy+300);
+  c.fillStyle=P.mute;c.font="600 "+BODY.replace("{s}",28);c.fillText("in "+monthName(ym,{month:"long"}),rx,cy+342);
+  y=cy+chh+80;
   // exercises / PRs
   const prN=new Set(d.prs.map(p=>p.name)),rows=(d.ex||[]).slice().sort((a,b)=>prN.has(b.name)-prN.has(a.name)).slice(0,4);
-  const maxY=1475;
+  const maxY=1490;
   rows.forEach(r=>{if(y>maxY)return;
-    c.strokeStyle=P.line;c.lineWidth=2;c.beginPath();c.moveTo(X,y-58);c.lineTo(X+IW,y-58);c.stroke();
-    const right=(r.w?kg(r.w)+" kg":"BW")+" × "+r.r;c.font="800 "+BODY.replace("{s}",40);const rw=c.measureText(right).width;
-    let lx=X;if(prN.has(r.name)){c.fillStyle=P.hot;rrect(c,X,y-36,76,46,23);c.fill();c.fillStyle=P.hotInk;c.font="800 "+BODY.replace("{s}",26);c.fillText("PR",X+21,y-4);lx=X+94}
-    c.fillStyle=P.ink;fitFont(c,r.name,"700 "+BODY,40,IW-rw-(lx-X)-30);c.fillText(r.name,lx,y);
-    c.font="800 "+BODY.replace("{s}",40);c.textAlign="right";c.fillStyle=t==="chalk"?P.ink:P.acc;c.fillText(right,X+IW,y);c.textAlign="left";y+=86});
+    c.strokeStyle=P.line;c.lineWidth=2;c.beginPath();c.moveTo(X,y-54);c.lineTo(X+IW,y-54);c.stroke();
+    const right=(r.w?kg(r.w)+" kg":"BW")+" × "+r.r;c.font="800 "+BODY.replace("{s}",38);const rw2=c.measureText(right).width;
+    let lx=X;if(prN.has(r.name)){c.fillStyle=P.hot;rrect(c,X,y-34,72,44,22);c.fill();c.fillStyle=P.hotInk;c.font="800 "+BODY.replace("{s}",24);c.fillText("PR",X+20,y-4);lx=X+88}
+    c.fillStyle=P.ink;fitFont(c,r.name,"700 "+BODY,38,IW-rw2-(lx-X)-30);c.fillText(r.name,lx,y);
+    c.font="800 "+BODY.replace("{s}",38);c.textAlign="right";c.fillStyle=t==="chalk"?P.ink:P.acc;c.fillText(right,X+IW,y);c.textAlign="left";y+=80});
   // promo footer (kept above the bottom ~250px Instagram covers)
   const py=1530;c.fillStyle=P.acc;rrect(c,X,py,IW,150,36);c.fill();
   c.fillStyle=P.accInk;c.font="800 "+BODY.replace("{s}",40);fitFont(c,"Track your gym progress — free","800 "+BODY,40,IW-80);c.fillText("Track your gym progress — free",X+40,py+64);
@@ -755,7 +807,7 @@ function finish(){
   const wk=weekOf(w.date),inWeek=S.workouts.filter(x=>weekOf(x.date)===wk),days=[0,0,0,0,0,0,0];
   inWeek.forEach(x=>{days[(parse(x.date).getDay()+6)%7]=1});
   markUp(w.id);markState();
-  celebrate({past:!!A.past,date:w.date,vol:volOf(w),sets:allSets(w).length,mins:Math.max(1,Math.round((w.end-(w.start||w.end))/60000)),prs:prDetail,parts:w.parts,week:inWeek.length,days,ex:w.ex.map(e=>{const t=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);return{name:e.name,w:t.w,r:t.r,n:e.sets.length}}),dayName:parse(w.date).toLocaleDateString(undefined,{weekday:"long"})});
+  celebrate({past:!!A.past,date:w.date,vol:volOf(w),sets:allSets(w).length,mins:Math.max(1,Math.round((w.end-(w.start||w.end))/60000)),prs:prDetail,parts:w.parts,week:inWeek.length,days,streak:weekStreak(),monthDays:monthDays(monthOf(w.date)),cal:[...trainedDays()].filter(k=>k.slice(0,7)===monthOf(w.date)).map(k=>+k.slice(8)),ex:w.ex.map(e=>{const t=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);return{name:e.name,w:t.w,r:t.r,n:e.sets.length}}),dayName:parse(w.date).toLocaleDateString(undefined,{weekday:"long"})});
   render();
 }
 app.addEventListener("click",e=>{
@@ -774,6 +826,8 @@ app.addEventListener("click",e=>{
   if(d.delset!=null){A.ex[A.cur].sets.splice(+d.delset,1);markState();render();return}
   if(d.period){period=d.period;render();return}
   if(d.open){openId=openId===d.open?null:d.open;render();return}
+  if(d.calm){const[y,m]=calYm.split("-").map(Number),nd=new Date(y,m-1+(+d.calm),1);calYm=nd.getFullYear()+"-"+pad(nd.getMonth()+1);render();return}
+  if(d.calday){const w=S.workouts.find(x=>x.date===d.calday);if(w){openId=w.id;go("history");setTimeout(()=>{const el=document.querySelector('[data-open="'+w.id+'"]');if(el)el.scrollIntoView({block:"center"})},60)}return}
   if(d.delw){
     const w=S.workouts.find(x=>x.id===d.delw);if(!w)return;
     S.workouts=S.workouts.filter(x=>x!==w);openId=null;markDel(w.id);render();

@@ -249,6 +249,14 @@ function viewLogger(A){
   popSet=false;
   return h;
 }
+/* Exercise photo animations keep their place across re-renders (logging a set, editing, +/−):
+   each exercise remembers when its animation started and new copies continue from there. */
+const animT0={};
+function syncPhotoAnim(){
+  const now=performance.now();
+  app.querySelectorAll(".fig2").forEach(f=>{const k=f.getAttribute("aria-label")||"";if(animT0[k]==null)animT0[k]=now;
+    const d=-(now-animT0[k])+"ms";f.querySelectorAll(".ph-b,.ph,svg *").forEach(el=>{if(getComputedStyle(el).animationName!=="none")el.style.animationDelay=d})});
+}
 function stepper(k,label,step){
   return '<div class="step"><label for="in-'+k+'">'+label+'</label><div class="ctl"><button data-step="'+k+'" data-d="-'+step+'" aria-label="Less">−</button>'+
     '<input id="in-'+k+'" class="num" inputmode="decimal" value="'+esc(draft[k])+'" data-draft="'+k+'"><button data-step="'+k+'" data-d="'+step+'" aria-label="More">+</button></div></div>';
@@ -849,9 +857,8 @@ function render(){
   if(loadingData&&!isGuest()&&["home","progress","workout"].includes(tab)){setHead(tab==="home"?"Home":tab==="progress"?"Progress":"Workout","Loading your data…");app.innerHTML=tab==="home"?skHome():tab==="progress"?skProgress():skWorkout();syncUrl();document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));return}
   const v=tab==="home"?viewHome():tab==="workout"?viewWorkout():tab==="progress"?viewProgress():tab==="admin"?viewAdmin():tab==="plans"?viewPlans():tab==="invite"?viewInvite():viewAccount();
   const ann=CONF.general.announcement&&tab!=="admin"?'<section class="card announce" role="status">'+esc(CONF.general.announcement)+'</section>':'';
-  const oldFig=app.querySelector(".fig2"),oldKey=oldFig&&oldFig.getAttribute("aria-label");
   app.innerHTML=ann+(isGuest()&&!["account","plans"].includes(tab)?guestBanner(tab!=="home"):'')+v;
-  {const nf=app.querySelector(".fig2");if(oldFig&&nf&&nf.getAttribute("aria-label")===oldKey)nf.replaceWith(oldFig)} // keep the exercise animation running
+  syncPhotoAnim();
   fitText(app);syncUrl();document.body.classList.toggle("lifting",!!S.active);
   document.querySelectorAll("nav button").forEach(b=>{b.classList.toggle("on",b.dataset.tab===tab);b.setAttribute("aria-current",b.dataset.tab===tab?"page":"false")});
   ro.disconnect();const f=document.getElementById("fig");if(f){ro.observe(f);drawChart()}

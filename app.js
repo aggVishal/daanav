@@ -56,7 +56,7 @@ function applyTheme(t){
 }
 const blank=()=>({workouts:[],active:null,custom:{},profile:{},pending:{up:{},del:{},state:0}});
 let S=blank();
-let editSet=null,logDate=null,pastMins=60,tab="home",period="week",pickPart=null,showAllParts=false,summary=null,openId=null,progEx=null,draft={w:"",r:""},msgText="",popSet=false;
+let recsAll=false,editSet=null,logDate=null,pastMins=60,tab="home",period="week",pickPart=null,showAllParts=false,summary=null,openId=null,progEx=null,draft={w:"",r:""},msgText="",popSet=false;
 let authEmail="",authName="",pendingName="",authGender="",pendingGender="",ready=false,FB=null,fbAuth=null,fdb=null,user=null,authMode="signin",authMsg="",authBusy=false,syncState="idle",syncErr="",flushing=false,flushTimer=null,ver=1,bootError="";
 
 /* ---------- Local cache (per user) ---------- */
@@ -250,6 +250,26 @@ function periodKeys(n){
 }
 const keyOf=w=>period==="week"?weekOf(w.date):monthOf(w.date);
 const plabel=(k,i,ks)=>period==="week"?(i===0||monthOf(k)!==monthOf(ks[i-1])?short(k):String(parse(k).getDate())):parse(k+"-01").toLocaleDateString(undefined,{month:"short"});
+/* Every PR you've ever set: a heavier top set than all earlier sessions of that exercise. */
+function prEvents(){const best={},out=[];for(const w of sorted())for(const e of w.ex){const top=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]||{w:0,r:0}),b=best[e.name]||0;
+  if(b>0&&top.w>b)out.push({name:e.name,part:e.part,w:top.w,r:top.r,prev:b,date:w.date,wid:w.id});if(top.w>b)best[e.name]=top.w}return out.reverse()}
+let prScope="period";
+function openPrs(){const box=document.getElementById("dpick");dp=null;box.hidden=false;navPush({ov:"dpick"});drawPrs()}
+function drawPrs(){
+  const box=document.getElementById("dpick"),cur=keyOf({date:dkey(new Date())}),all=prEvents(),list=prScope==="all"?all:all.filter(x=>keyOf({date:x.date})===cur);
+  const lbl=period==="week"?"This week":"This month";
+  let h='<div class="dp-card prs-card" role="dialog" aria-modal="true" aria-label="Personal records"><div class="prs-h"><h3>Your PRs</h3><button class="dr-x" data-dpclose="1" aria-label="Close"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>'+
+    '<div class="seg"><button class="'+(prScope!=="all"?"on":"")+'" data-prscope="period">'+lbl+' ('+all.filter(x=>keyOf({date:x.date})===cur).length+')</button><button class="'+(prScope==="all"?"on":"")+'" data-prscope="all">All time ('+all.length+')</button></div><div class="prs-list">';
+  if(!list.length)h+='<p class="sub" style="text-align:center;margin:24px 0">'+(prScope==="all"?"No PRs yet. Beat your best weight on any exercise to set one.":"No PRs "+lbl.toLowerCase()+" yet. Go lift something heavier!")+'</p>';
+  let last="";
+  for(const x of list){const mo=monthName(x.date.slice(0,7));if(prScope==="all"&&mo!==last){last=mo;h+='<h4 class="ugrp">'+esc(mo)+'</h4>'}
+    h+='<button class="prs-row" data-prw="'+x.wid+'"><span class="prb">PR</span><span class="prs-n"><b>'+esc(x.name)+'</b><small>'+esc(relDay(x.date))+' · was '+kg(x.prev)+' kg</small></span><span class="prs-v"><b class="num">'+kg(x.w)+' kg × '+x.r+'</b><small class="up">+'+kg(Math.round((x.w-x.prev)*100)/100)+' kg</small></span></button>'}
+  box.innerHTML=h+'</div></div>';
+}
+document.getElementById("dpick").addEventListener("click",e=>{
+  const sc=e.target.closest("[data-prscope]");if(sc){e.stopImmediatePropagation();prScope=sc.dataset.prscope;drawPrs();return}
+  const r=e.target.closest("[data-prw]");if(r){e.stopImmediatePropagation();const wid=r.dataset.prw;navReplace({tab});closeDatePicker(true);openId=wid;go("home");setTimeout(()=>{const el=document.querySelector('[data-open="'+wid+'"]');if(el)el.scrollIntoView({block:"center"})},80)}
+},true);
 function prsIn(key){
   const best={};let n=0;const hit=new Set();
   for(const w of sorted()){const inP=keyOf(w)===key;
@@ -334,7 +354,7 @@ function viewProgress(){
   if(!S.workouts.length)return h+trophyCase()+'<section class="card empty"><h3>No workouts yet</h3><p>Log your first workout and your progress shows up here.</p><button class="btn" data-tab-go="workout">Start a workout</button></section>';
   h+=trophyCase();
   h+='<section class="card"><h3>'+(period==="week"?"This week":"This month")+'</h3><div class="tiles">'+
-    tile("New PRs",prsIn(cur),'<em>heavier than ever before</em>')+tile("Workouts",c.n,chip(ch(c.n,p.n),lbl))+
+    '<button class="tile tilebtn" data-act="showprs" aria-label="See all your PRs"><span>New PRs</span><b class="num">'+prsIn(cur)+'</b><em>tap to see the list ›</em></button>'+tile("Workouts",c.n,chip(ch(c.n,p.n),lbl))+
     tile("Sets",c.sets,chip(ch(c.sets,p.sets),lbl))+tile("Volume (kg)",fmt(c.vol),'<em class="note">weight × reps</em>'+chip(ch(c.vol,p.vol),lbl))+'</div>'+
     '<button class="btn wide sharebtn recapbtn" data-act="sharerecap">'+SHARE_ICON+'Share my '+(period==="week"?"week":"month")+' to story</button></section>';
   h+=consistencyCard();
@@ -355,9 +375,10 @@ function viewProgress(){
   h+='<section class="card"><h3>Volume per '+period+'</h3><p class="sub">Weight × reps, added up across all sets. Useful for comparing the same kind of workout over time. Heavy leg moves count far more than arm moves, and bodyweight moves count as 0.</p><div class="bars">'+keys.map((k,i)=>
     '<div class="bar'+(k===cur?" cur":"")+'"><i style="height:'+(by[k].vol/max*100)+'%">'+(by[k].vol?'<b>'+(by[k].vol>=1000?(by[k].vol/1000).toFixed(1)+"k":fmt(by[k].vol))+'</b>':'')+'</i><span>'+plabel(k,i,keys)+'</span></div>').join("")+'</div></section>';
   const rec={};for(const w of sorted())for(const e of w.ex)for(const s of e.sets){const r=rec[e.name];if(!r||s.w>r.w||(s.w===r.w&&s.r>r.r))rec[e.name]={w:s.w,r:s.r,d:w.date,rm:0};rec[e.name].rm=Math.max(rec[e.name].rm||0,e1rm(s))}
-  const rows=Object.entries(rec).sort((a,b)=>a[0].localeCompare(b[0]));
-  h+='<section class="card"><h3>Personal records</h3><table class="stack"><thead><tr><th>Exercise</th><th class="r">Best set</th><th class="r">Est. 1RM</th><th class="r">Date</th></tr></thead><tbody>'+
-    rows.map(([n,r])=>'<tr><td>'+esc(n)+'</td><td data-l="Best set" class="r num">'+wl(r.w)+' × '+r.r+'</td><td data-l="Est. 1RM" class="r num">'+(r.w?kg(Math.round(r.rm*2)/2)+' kg':'–')+'</td><td data-l="Date" class="r">'+short(r.d)+'</td></tr>').join("")+'</tbody></table></section>';
+  const rows=Object.entries(rec).sort((a,b)=>b[1].d.localeCompare(a[1].d)||a[0].localeCompare(b[0])),shown=recsAll?rows:rows.slice(0,6);
+  h+='<section class="card"><div class="tro-head"><h3>Personal records</h3><button class="link" data-act="showprs">PR history</button></div><p class="sub">Your best set for every exercise, newest first.</p><table class="stack"><thead><tr><th>Exercise</th><th class="r">Best set</th><th class="r">Est. 1RM</th><th class="r">Date</th></tr></thead><tbody>'+
+    shown.map(([n,r])=>'<tr><td>'+esc(n)+'</td><td data-l="Best set" class="r num">'+wl(r.w)+' × '+r.r+'</td><td data-l="Est. 1RM" class="r num">'+(r.w?kg(Math.round(r.rm*2)/2)+' kg':'–')+'</td><td data-l="Date" class="r">'+short(r.d)+'</td></tr>').join("")+'</tbody></table>'+
+    (rows.length>6?'<button class="link tro-more" data-act="allrecs">'+(recsAll?"Show fewer":"Show all "+rows.length+" exercises")+'</button>':'')+'</section>';
   chartPts=pts;
   return h;
 }
@@ -1323,6 +1344,8 @@ app.addEventListener("click",e=>{
     case"signout":signOut();break;
     case"shareinvite":shareInvite();break;
     case"homemore":homeShow+=15;render();break;
+    case"showprs":prScope="period";openPrs();break;
+    case"allrecs":recsAll=!recsAll;render();break;
     case"rmphoto":removePhoto();break;
     case"pickdate":openDatePicker(b.dataset.for);break;
     case"sharerecap":{const sp=recapSpec(period);if(!sp.count){toast("Log a workout "+(period==="week"?"this week":"this month")+" first",null);break}openShare(sp);break}

@@ -757,3 +757,17 @@ nav .fab-c{position:relative}
 .crop-z{display:flex;align-items:center;gap:12px;margin:0 6px 14px;font-weight:800;color:var(--mute);font-size:20px}
 .crop-z input{flex:1;accent-color:var(--accent);height:32px}
 @media(max-width:340px){.crop-v{width:240px;height:240px}}
+
+/* ---------- PR list ---------- */
+.tilebtn{text-align:left;color:var(--ink);border:2px solid transparent;cursor:pointer;display:block;width:100%}
+.tilebtn em{color:var(--accent)!important}
+[data-theme=chalk] .tilebtn em{color:var(--ink)!important}
+.prs-card{max-height:82vh;display:flex;flex-direction:column}
+.prs-h{display:flex;align-items:center;justify-content:space-between}
+.prs-h h3{margin:0}
+.prs-card .seg{margin:10px 0 6px}
+.prs-list{overflow:auto;margin:0 -4px;padding:0 4px}
+.prs-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;padding:12px 0;border-bottom:1px solid var(--line);color:var(--ink)}
+.prs-row .prb{flex:none;font-size:11px}
+.prs-n{flex:1;min-width:0}.prs-n b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.prs-n small{color:var(--mute);font-size:12px}
+.prs-v{text-align:right;flex:none}.prs-v b{display:block;font:var(--dw) 18px/1.1 var(--display);font-stretch:var(--ds)}.prs-v small{font-size:12px;font-weight:700}

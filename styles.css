@@ -605,3 +605,7 @@ nav button{font-size:12px}
 .pfp-up{position:relative;min-height:44px;padding:0 16px;font-size:15px;cursor:pointer;display:inline-flex;align-items:center}
 .pfp-up input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:16px}
 .pfp-up:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+.planrow{grid-template-areas:none;border-top:1px solid var(--line);padding:10px 0}
+.planrow .ptag{grid-column:1/-1;display:flex;align-items:center;gap:8px;margin:0}
+.planrow .ptag span{width:52px;text-align:center;font-size:13px;font-weight:700;color:var(--mute)}
+.planrow .ptag input{flex:1;height:40px;min-height:40px;padding:0 10px;font-size:15px}

@@ -1150,10 +1150,10 @@ const CONF_KEY="daanav-conf",REF_KEY="daanav-ref";
 const CUR_SYM={INR:"₹",USD:"$",EUR:"€",GBP:"£"};
 function defConf(){return{
   pricing:{enabled:false,currency:"INR",trialDays:7,plans:[
-    {id:"monthly",name:"Monthly",price:199,months:1,active:true},
-    {id:"quarterly",name:"3 months",price:499,months:3,active:true},
-    {id:"yearly",name:"Yearly",price:1499,months:12,active:true},
-    {id:"lifetime",name:"Lifetime",price:3999,months:0,active:false}]},
+    {id:"monthly",name:"Monthly",price:199,months:1,active:true,tag:""},
+    {id:"quarterly",name:"3 months",price:499,months:3,active:true,tag:""},
+    {id:"yearly",name:"Yearly",price:1499,months:12,active:true,tag:"Best value"},
+    {id:"lifetime",name:"Lifetime",price:3999,months:0,active:false,tag:"Best value"}]},
   offer:{active:false,percent:20,label:"Launch offer",endsOn:""},
   referral:{enabled:false,rewardDays:30,friendPercent:10},
   general:{guestMode:true,announcement:""}}}
@@ -1245,7 +1245,9 @@ function viewPlans(){
   h+='<section class="card"><h3>Choose a plan</h3>'+(CONF.pricing.trialDays>0?'<p class="sub">Start with a <b>'+pl(CONF.pricing.trialDays,"day")+' free trial</b>. Cancel any time.</p>':'')+'<div class="plans">';
   if(!plans.length)h+='<p class="sub">No plans are available right now.</p>';
   for(const p of plans){const now=priceAfter(p,couponOk),cut=now<p.price;
-    h+='<div class="plan'+(p.id==="yearly"?' best':'')+'">'+(p.id==="yearly"?'<span class="pbadge">Best value</span>':'')+'<b class="pn">'+esc(p.name)+'</b>'+
+    const tg=String(p.tag||"").trim(),dup=tg&&plans.slice(plans.indexOf(p)+1).some(q=>String(q.tag||"").trim().toLowerCase()===tg.toLowerCase());
+    const tg2=dup?"":tg;
+    h+='<div class="plan'+(tg2?' best':'')+'">'+(tg2?'<span class="pbadge">'+esc(tg2)+'</span>':'')+'<b class="pn">'+esc(p.name)+'</b>'+
       '<div class="pp"><span class="num">'+money(now)+'</span>'+(cut?'<s>'+money(p.price)+'</s>':'')+'</div>'+
       '<small>'+(!p.months?'one-time payment · yours forever':p.months>1?money(Math.round(now/p.months))+' per month':'per month')+'</small></div>'}
   h+='</div><form id="couponForm" class="coupon"><input type="text" id="couponCode" maxlength="20" autocapitalize="characters" placeholder="Coupon code" value="'+esc(couponIn)+'"><button class="btn" type="submit"'+(couponBusy?" disabled":"")+'>'+(couponBusy?"…":"Apply")+'</button></form>'+
@@ -1323,7 +1325,10 @@ function viewAdmin(){
     h+='<section class="card"><h3>Pricing</h3><form id="admPricing">'+sw("enabled",P.enabled,"Show Plans to users","Adds “Plans” to everyone’s menu. Payments aren’t connected yet, so nobody is charged.")+
       '<div class="row2"><div><label class="fl">Currency</label><select name="currency">'+Object.keys(CUR_SYM).map(c=>'<option'+(c===P.currency?" selected":"")+'>'+c+'</option>').join("")+'</select></div><div>'+fnum("trialDays",P.trialDays,"Free trial (days)",'min="0" max="90" step="1"')+'</div></div>'+
       '<h4 class="sh">Plans</h4>'+P.plans.map(p=>'<div class="planrow"><span class="sw"><input type="checkbox" name="on_'+p.id+'"'+(p.active?" checked":"")+' aria-label="'+esc(p.name)+' on"><i></i></span>'+
-        '<input type="text" name="name_'+p.id+'" maxlength="24" value="'+esc(p.name)+'" aria-label="Plan name"><span class="cur">'+(CUR_SYM[P.currency]||"")+'</span><input type="number" inputmode="decimal" name="price_'+p.id+'" min="0" step="1" value="'+p.price+'" aria-label="'+esc(p.name)+' price"><small>'+(p.months?p.months+' mo':'once')+'</small></div>').join("")+
+        '<input type="text" name="name_'+p.id+'" maxlength="24" value="'+esc(p.name)+'" aria-label="Plan name"><span class="cur">'+(CUR_SYM[P.currency]||"")+'</span><input type="number" inputmode="decimal" name="price_'+p.id+'" min="0" step="1" value="'+p.price+'" aria-label="'+esc(p.name)+' price"><small>'+(p.months?p.months+' mo':'once')+'</small>'+
+        '<label class="ptag"><span>Tag</span><input type="text" name="tag_'+p.id+'" maxlength="20" list="tagIdeas" value="'+esc(p.tag||"")+'" placeholder="No tag" aria-label="'+esc(p.name)+' tag"></label></div>').join("")+
+      '<datalist id="tagIdeas"><option value="Best value"><option value="Most popular"><option value="Save 40%"><option value="Limited offer"><option value="Recommended"></datalist>'+
+      '<p class="sub" style="margin:6px 0 0">Tags show as a badge on the plan, like “Best value”. Leave empty for no badge. If two live plans have the same tag, only the lower one shows it.</p>'+
       saveBtn("Save pricing")+amsg("pricing")+'</form></section>';
     h+='<section class="card"><h3>Preview</h3><p class="sub">What users see on the Plans page right now'+(offerLive()?', with the '+O.percent+'% offer applied':'')+'.</p><div class="plans">'+P.plans.filter(p=>p.active).map(p=>'<div class="plan"><b class="pn">'+esc(p.name)+'</b><div class="pp"><span class="num">'+money(priceAfter(p))+'</span>'+(priceAfter(p)<p.price?'<s>'+money(p.price)+'</s>':'')+'</div></div>').join("")+'</div><button class="btn ghost wide" data-tab-go="plans" style="margin-top:12px">Open Plans page</button></section>';
   }else if(admSub==="offers"){
@@ -1389,7 +1394,7 @@ app.addEventListener("submit",e=>{
   e.preventDefault();
   const C=clean(CONF);
   if(id==="admPricing"){C.pricing.enabled=f.elements.enabled.checked;C.pricing.currency=fv(f,"currency");C.pricing.trialDays=Math.round(fn(f,"trialDays",0,90));
-    C.pricing.plans=C.pricing.plans.map(p=>Object.assign(p,{active:f.elements["on_"+p.id].checked,name:(fv(f,"name_"+p.id).trim()||p.name).slice(0,24),price:Math.round(fn(f,"price_"+p.id,0,1e6))}));saveConf(C,"pricing")}
+    C.pricing.plans=C.pricing.plans.map(p=>Object.assign(p,{active:f.elements["on_"+p.id].checked,name:(fv(f,"name_"+p.id).trim()||p.name).slice(0,24),price:Math.round(fn(f,"price_"+p.id,0,1e6)),tag:fv(f,"tag_"+p.id).trim().slice(0,20)}));saveConf(C,"pricing")}
   else if(id==="admOffer"){C.offer={active:f.elements.active.checked,label:fv(f,"label").trim().slice(0,40),percent:Math.round(fn(f,"percent",1,90)),endsOn:fv(f,"endsOn")};saveConf(C,"offers")}
   else if(id==="admRef"){C.referral={enabled:f.elements.enabled.checked,rewardDays:Math.round(fn(f,"rewardDays",0,365)),friendPercent:Math.round(fn(f,"friendPercent",0,90))};saveConf(C,"referrals")}
   else if(id==="admGen"){C.general={guestMode:f.elements.guestMode.checked,announcement:fv(f,"announcement").trim().slice(0,160)};saveConf(C,"general")}

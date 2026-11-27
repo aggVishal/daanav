@@ -118,7 +118,7 @@
     "Russian twist": { a: { hip: [46, 84], t: -35, hand: [62, 66], eb: 1, foot: [72, 74], kb: 1 }, b: { hip: [46, 84], t: -40, hand: [50, 74], eb: 1, foot: [72, 74], kb: 1 }, props: [], wt: "db", cue: "Lean back, feet up. Rotate the weight from side to side." },
     "Crunches": { a: { hip: [58, 88], t: -90, hand: [28, 84], eb: -1, foot: [76, 92], kb: 1 }, b: { hip: [58, 88], t: -62, hand: [32, 72], eb: -1, foot: [76, 92], kb: 1 }, props: [], cue: "Knees bent, lift your shoulders off the floor, lower slowly." }
   };
-  var BY_PART = { Chest: "Bench press", Back: "Barbell row", Shoulders: "Dumbbell shoulder press", Legs: "Squat", Biceps: "Dumbbell curl", Triceps: "Tricep pushdown", Core: "Crunches", Glutes: "Hip thrust" };
+  var BY_PART = { Chest: "Bench press", Back: "Barbell row", Shoulders: "Dumbbell shoulder press", Legs: "Squat", Biceps: "Dumbbell curl", Triceps: "Tricep pushdown", Core: "Crunches", Glutes: "Hip thrust", Forearms: "Hammer curl" };
   var WORDS = [["pull", "Pull-ups"], ["chin", "Pull-ups"], ["row", "Barbell row"], ["deadlift", "Deadlift"], ["squat", "Squat"], ["lunge", "Walking lunges"], ["leg press", "Leg press"], ["curl", "Dumbbell curl"], ["pushdown", "Tricep pushdown"], ["extension", "Overhead tricep extension"], ["dip", "Dips"], ["push", "Push-ups"], ["fly", "Chest fly (machine)"], ["raise", "Lateral raise"], ["press", "Dumbbell shoulder press"], ["crunch", "Crunches"], ["plank", "Push-ups"], ["calf", "Calf raise"]];
   function pick(name, part) {
     if (EX[name]) return EX[name];
@@ -188,13 +188,13 @@
 
   /* ---- muscles worked (keys drive the 3D highlight; labels show in the How-to view) ---- */
   var MUSCLE_LABEL = { pecs: "Chest", delts: "Shoulders", traps: "Traps", lats: "Lats", biceps: "Biceps", triceps: "Triceps", forearms: "Forearms", abs: "Abs", obliques: "Obliques", glutes: "Glutes", quads: "Quads", hams: "Hamstrings", calves: "Calves", lowback: "Lower back" };
-  var PART_MUS = { Chest: ["pecs", "delts", "triceps"], Back: ["lats", "traps", "biceps"], Shoulders: ["delts", "traps"], Legs: ["quads", "glutes", "hams"], Biceps: ["biceps", "forearms"], Triceps: ["triceps"], Core: ["abs", "obliques"], Glutes: ["glutes", "hams"] };
+  var PART_MUS = { Chest: ["pecs", "delts", "triceps"], Back: ["lats", "traps", "biceps"], Shoulders: ["delts", "traps"], Legs: ["quads", "glutes", "hams"], Biceps: ["biceps", "forearms"], Triceps: ["triceps"], Core: ["abs", "obliques"], Glutes: ["glutes", "hams"], Forearms: ["forearms", "biceps"] };
   var MUS = {
     "Chest fly (machine)": ["pecs", "delts"], "Cable crossover": ["pecs", "delts"], "Push-ups": ["pecs", "triceps", "delts", "abs"], "Dips": ["pecs", "triceps", "delts"],
     "Deadlift": ["glutes", "hams", "lowback", "traps", "forearms"], "Pull-ups": ["lats", "biceps", "forearms"], "Face pull": ["delts", "traps"], "T-bar row": ["lats", "traps", "biceps", "lowback"],
     "Lateral raise": ["delts"], "Front raise": ["delts"], "Rear delt fly": ["delts", "traps"], "Shrugs": ["traps", "forearms"],
     "Squat": ["quads", "glutes", "hams", "lowback"], "Leg press": ["quads", "glutes"], "Romanian deadlift": ["hams", "glutes", "lowback"], "Walking lunges": ["quads", "glutes", "hams"],
-    "Bulgarian split squat": ["quads", "glutes"], "Leg extension": ["quads"], "Leg curl": ["hams"], "Hip thrust": ["glutes", "hams"], "Glute bridge": ["glutes", "hams"], "Single-leg glute bridge": ["glutes", "hams"], "Cable kickback": ["glutes"], "Glute kickback": ["glutes", "hams"], "Sumo squat": ["glutes", "quads"], "Step-ups": ["quads", "glutes"], "Hip abduction (machine)": ["glutes"], "Hip adduction (machine)": ["quads"], "Goblet squat": ["quads", "glutes"], "Assisted pull-ups": ["lats", "biceps"], "Calf raise": ["calves"],
+    "Bulgarian split squat": ["quads", "glutes"], "Leg extension": ["quads"], "Leg curl": ["hams"], "Dumbbell pullover": ["pecs", "lats", "triceps"], "Wrist curl": ["forearms"], "Reverse wrist curl": ["forearms"], "Reverse curl": ["forearms", "biceps"], "Dumbbell wrist curl": ["forearms"], "Dumbbell reverse wrist curl": ["forearms"], "Behind-the-back wrist curl": ["forearms"], "Cable wrist curl": ["forearms"], "Wrist roller": ["forearms", "delts"], "Farmer's walk": ["forearms", "traps", "abs"], "Plate pinch": ["forearms"], "Hip thrust": ["glutes", "hams"], "Glute bridge": ["glutes", "hams"], "Single-leg glute bridge": ["glutes", "hams"], "Cable kickback": ["glutes"], "Glute kickback": ["glutes", "hams"], "Sumo squat": ["glutes", "quads"], "Step-ups": ["quads", "glutes"], "Hip abduction (machine)": ["glutes"], "Hip adduction (machine)": ["quads"], "Goblet squat": ["quads", "glutes"], "Assisted pull-ups": ["lats", "biceps"], "Calf raise": ["calves"],
     "Close-grip bench press": ["triceps", "pecs"], "Hanging leg raise": ["abs", "obliques", "forearms"], "Ab wheel rollout": ["abs", "lats"], "Russian twist": ["obliques", "abs"]
   };
   var TIPS = {
@@ -205,6 +205,7 @@
     Biceps: ["Keep your elbows still at your sides.", "Lower all the way for a full stretch.", "Squeeze at the top for a second."],
     Triceps: ["Keep your upper arms still.", "Lock out fully and squeeze.", "Lower slowly — the stretch builds strength."],
     Core: ["Move slowly and keep tension the whole time.", "Breathe out as you crunch or lift.", "Stop if you feel it in your lower back."],
+    Forearms: ["Use a full range: let the wrist open fully, then curl all the way up.", "Go lighter than you think and keep it slow; wrists don't like jerky reps.", "Keep your forearms resting on the bench or thighs so only the wrists move."],
     Glutes: ["Squeeze your glutes hard at the top and pause for a second.", "Keep your ribs down so your lower back doesn't arch.", "Drive through your heels, not your toes."]
   };
   function muscles(name, part) { return (MUS[name] || PART_MUS[part] || PART_MUS.Chest).slice(); }

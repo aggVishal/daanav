@@ -6,13 +6,14 @@ const isGuest=()=>!!(user&&user.guest);
 function guestFlag(){try{return localStorage.getItem(GUEST)==="1"}catch(e){return false}}
 function enterGuest(keepTab){try{localStorage.setItem(GUEST,"1")}catch(e){}user={id:"guest",guest:true,name:"",email:"",providers:[]};authOpen=false;authMsg="";if(keepTab!==true)tab="home";loadCache();setSync("idle");render();window.scrollTo(0,0)}
 const LIB={
-  Chest:["Bench press","Incline bench press","Dumbbell bench press","Incline dumbbell press","Machine chest press","Chest fly (machine)","Cable crossover","Push-ups","Dips"],
+  Chest:["Bench press","Incline bench press","Dumbbell bench press","Incline dumbbell press","Machine chest press","Chest fly (machine)","Cable crossover","Dumbbell pullover","Push-ups","Dips"],
   Back:["Deadlift","Pull-ups","Lat pulldown","Barbell row","Seated cable row","Dumbbell row","T-bar row","Face pull"],
   Shoulders:["Overhead press","Dumbbell shoulder press","Arnold press","Lateral raise","Front raise","Rear delt fly","Shrugs"],
   Legs:["Squat","Leg press","Romanian deadlift","Walking lunges","Bulgarian split squat","Leg extension","Leg curl","Hip thrust","Calf raise"],
   Biceps:["Barbell curl","Dumbbell curl","Hammer curl","Preacher curl","Cable curl","Incline dumbbell curl"],
   Triceps:["Tricep pushdown","Overhead tricep extension","Skull crushers","Close-grip bench press","Tricep dips"],
   Core:["Hanging leg raise","Cable crunch","Ab wheel rollout","Russian twist","Crunches"],
+  Forearms:["Wrist curl","Reverse wrist curl","Reverse curl","Hammer curl","Dumbbell wrist curl","Dumbbell reverse wrist curl","Behind-the-back wrist curl","Cable wrist curl","Wrist roller","Farmer's walk","Plate pinch"],
   Glutes:["Hip thrust","Glute bridge","Single-leg glute bridge","Cable kickback","Glute kickback","Sumo squat","Step-ups","Hip abduction (machine)","Hip adduction (machine)"]
 };
 LIB.Legs.splice(3,0,"Goblet squat");LIB.Back.splice(3,0,"Assisted pull-ups");
@@ -20,7 +21,7 @@ const PARTS=Object.keys(LIB);
 /* Gender: "f" female, "m" male, "x" prefer not to say. Used only to order body parts and exercises. */
 const G_OPTS=[["f","Female"],["m","Male"],["x","Prefer not to say"]];
 const gender=()=>(S&&S.profile&&S.profile.gender)||"";
-const FEM_PARTS=["Glutes","Legs","Back","Shoulders","Core","Biceps","Triceps","Chest"];
+const FEM_PARTS=["Glutes","Legs","Back","Shoulders","Core","Biceps","Triceps","Forearms","Chest"];
 const FEM_FIRST={Legs:["Hip thrust","Romanian deadlift","Goblet squat","Bulgarian split squat","Walking lunges"],Back:["Lat pulldown","Assisted pull-ups","Seated cable row","Dumbbell row"],Chest:["Push-ups","Dumbbell bench press","Incline dumbbell press","Machine chest press"],Shoulders:["Dumbbell shoulder press","Lateral raise","Rear delt fly"]};
 const partsOrder=()=>gender()==="f"?FEM_PARTS:PARTS;
 function libFor(part){const base=LIB[part]||[];if(gender()!=="f"||!FEM_FIRST[part])return base;const f=FEM_FIRST[part].filter(x=>base.includes(x));return f.concat(base.filter(x=>!f.includes(x)))}

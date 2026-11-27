@@ -1,6 +1,168 @@
 /* Exercise photos and step-by-step instructions.
    Source: free-exercise-db by yuhonas (github.com/yuhonas/free-exercise-db), released into the public domain under the Unlicense. */
 window.EXDATA={
+"Dumbbell pullover": {
+"img": [
+"img/ex/dumbbell-pullover-0.webp",
+"img/ex/dumbbell-pullover-1.webp"
+],
+"steps": [
+"Place a dumbbell standing up on a flat bench.",
+"Ensuring that the dumbbell stays securely placed at the top of the bench, lie perpendicular to the bench (torso across it as in forming a cross) with only your shoulders lying on the surface. Hips should be below the bench and legs bent with feet firmly on the floor. The head will be off the bench as well.",
+"Grasp the dumbbell with both hands and hold it straight over your chest at arms length. Both palms should be pressing against the underside one of the sides of the dumbbell. This will be your starting position.\nCaution: Always ensure that the dumbbell used for this exercise is secure. Using a dumbbell with loose plates can result in the dumbbell falling apart and falling on your face.",
+"While keeping your arms straight, lower the weight slowly in an arc behind your head while breathing in until you feel a stretch on the chest.",
+"At that point, bring the dumbbell back to the starting position using the arc through which the weight was lowered and exhale as you perform this movement.",
+"Hold the weight on the initial position for a second and repeat the motion for the prescribed number of repetitions."
+],
+"src": "Straight-Arm_Dumbbell_Pullover"
+},
+"Wrist curl": {
+"img": [
+"img/ex/wrist-curl-0.webp",
+"img/ex/wrist-curl-1.webp"
+],
+"steps": [
+"Start out by placing a barbell on one side of a flat bench.",
+"Kneel down on both of your knees so that your body is facing the flat bench.",
+"Use your arms to grab the barbell with a supinated grip (palms up) and bring them up so that your forearms are resting against the flat bench. Your wrists should be hanging over the edge.",
+"Start out by curling your wrist upwards and exhaling.",
+"Slowly lower your wrists back down to the starting position while inhaling.",
+"Your forearms should be stationary as your wrist is the only movement needed to perform this exercise.",
+"Repeat for the recommended amount of repetitions."
+],
+"src": "Palms-Up_Barbell_Wrist_Curl_Over_A_Bench"
+},
+"Reverse wrist curl": {
+"img": [
+"img/ex/reverse-wrist-curl-0.webp",
+"img/ex/reverse-wrist-curl-1.webp"
+],
+"steps": [
+"Start out by placing a barbell on one side of a flat bench.",
+"Kneel down on both of your knees so that your body is facing the flat bench.",
+"Use your arms to grab the barbell with a pronated grip (palms down) and bring them up so that your forearms are resting against the flat bench. Your wrists should be hanging over the edge.",
+"Start out by curling your wrist upwards and exhaling.",
+"Slowly lower your wrists back down to the starting position while inhaling.",
+"Your forearms should be stationary as your wrist is the only movement needed to perform this exercise.",
+"Repeat for the recommended amount of repetitions."
+],
+"src": "Palms-Down_Wrist_Curl_Over_A_Bench"
+},
+"Dumbbell wrist curl": {
+"img": [
+"img/ex/dumbbell-wrist-curl-0.webp",
+"img/ex/dumbbell-wrist-curl-1.webp"
+],
+"steps": [
+"Start out by placing two dumbbells on the floor in front of a flat bench.",
+"Sit down on the edge of the flat bench with your legs at about shoulder width apart. Make sure to keep your feet on the floor.",
+"Use your arms to grab both of the dumbbells and bring them up so that your forearms are resting against your thighs with the palms of the hands facing up. Your wrists should be hanging over the edge of your thighs.",
+"Start out by curling your wrist upwards and exhaling.",
+"Slowly lower your wrists back down to the starting position while inhaling. Make sure to inhale during this part of the exercise. Tip: Your forearms should be stationary as your wrist is the only movement needed to perform this exercise.",
+"Repeat for the recommended amount of repetitions.",
+"When finished, simply lower the dumbbells to the floor."
+],
+"src": "Seated_Dumbbell_Palms-Up_Wrist_Curl"
+},
+"Dumbbell reverse wrist curl": {
+"img": [
+"img/ex/dumbbell-reverse-wrist-curl-0.webp",
+"img/ex/dumbbell-reverse-wrist-curl-1.webp"
+],
+"steps": [
+"Start out by placing two dumbbells on the floor in front of a flat bench.",
+"Sit down on the edge of the flat bench with your legs at about shoulder width apart. Make sure to keep your feet on the floor.",
+"Use your arms to grab both of the dumbbells and bring them up so that your forearms are resting against your thighs with the palms of the hands facing down. Your wrists should be hanging over the edge of your thighs.",
+"Start out by curling your wrist upwards and exhaling.",
+"Slowly lower your wrists back down to the starting position while inhaling. Make sure to inhale during this part of the exercise. Tip: Your forearms should be stationary as your wrist is the only movement needed to perform this exercise.",
+"Repeat for the recommended amount of repetitions.",
+"When finished, simply lower the dumbbells to the floor."
+],
+"src": "Seated_Dumbbell_Palms-Down_Wrist_Curl"
+},
+"Reverse curl": {
+"img": [
+"img/ex/reverse-curl-0.webp",
+"img/ex/reverse-curl-1.webp"
+],
+"steps": [
+"Stand up with your torso upright while holding a barbell at shoulder width with the elbows close to the torso. The palm of your hands should be facing down (pronated grip). This will be your starting position.",
+"While holding the upper arms stationary, curl the weights while contracting the biceps as you breathe out. Only the forearms should move. Continue the movement until your biceps are fully contracted and the bar is at shoulder level. Hold the contracted position for a second as you squeeze the muscle.",
+"Slowly begin to bring the bar back to starting position as your breathe in.",
+"Repeat for the recommended amount of repetitions."
+],
+"src": "Reverse_Barbell_Curl"
+},
+"Behind-the-back wrist curl": {
+"img": [
+"img/ex/behind-the-back-wrist-curl-0.webp",
+"img/ex/behind-the-back-wrist-curl-1.webp"
+],
+"steps": [
+"Start by standing straight and holding a barbell behind your glutes at arm's length while using a pronated grip (palms will be facing back away from the glutes) and having your hands shoulder width apart from each other.",
+"You should be looking straight forward while your feet are shoulder width apart from each other. This is the starting position.",
+"While exhaling, slowly elevate the barbell up by curling your wrist in a semi-circular motion towards the ceiling. Note: Your wrist should be the only body part moving for this exercise.",
+"Hold the contraction for a second and lower the barbell back down to the starting position while inhaling.",
+"Repeat for the recommended amount of repetitions.",
+"When finished, lower the barbell down to the squat rack or the floor by bending the knees. Tip: It is easiest to either pick it up from a squat rack or have a partner hand it to you."
+],
+"src": "Standing_Palms-Up_Barbell_Behind_The_Back_Wrist_Curl"
+},
+"Cable wrist curl": {
+"img": [
+"img/ex/cable-wrist-curl-0.webp",
+"img/ex/cable-wrist-curl-1.webp"
+],
+"steps": [
+"Start out by placing a flat bench in front of a low pulley cable that has a straight bar attachment.",
+"Use your arms to grab the cable bar with a narrow to shoulder width supinated grip (palms up) and bring them up so that your forearms are resting against the top of your thighs. Your wrists should be hanging just beyond your knees.",
+"Start out by curling your wrist upwards and exhaling. Keep the contraction for a second.",
+"Slowly lower your wrists back down to the starting position while inhaling.",
+"Your forearms should be stationary as your wrist is the only movement needed to perform this exercise.",
+"Repeat for the recommended amount of repetitions."
+],
+"src": "Cable_Wrist_Curl"
+},
+"Wrist roller": {
+"img": [
+"img/ex/wrist-roller-0.webp",
+"img/ex/wrist-roller-1.webp"
+],
+"steps": [
+"To begin, stand straight up grabbing a wrist roller using a pronated grip (palms facing down). Your feet should be shoulder width apart.",
+"Slowly lift both arms until they are fully extended and parallel to the floor in front of you. Note: Make sure the rope is not wrapped around the roller. Your entire body should be stationary except for the forearms. This is the starting position.",
+"Rotate one wrist at a time in an upward motion to bring the weight up to the bar by rolling the rope around the roller.",
+"Once the weight has reached the bar, slowly begin to lower the weight back down by rotating the wrist in a downward motion until the weight reaches the starting position.",
+"Repeat for the prescribed amount of repetitions in your program."
+],
+"src": "Wrist_Roller"
+},
+"Farmer's walk": {
+"img": [
+"img/ex/farmer-s-walk-0.webp",
+"img/ex/farmer-s-walk-1.webp"
+],
+"steps": [
+"There are various implements that can be used for the farmers walk. These can also be performed with heavy dumbbells or short bars if these implements aren't available. Begin by standing between the implements.",
+"After gripping the handles, lift them up by driving through your heels, keeping your back straight and your head up.",
+"Walk taking short, quick steps, and don't forget to breathe. Move for a given distance, typically 50-100 feet, as fast as possible."
+],
+"src": "Farmers_Walk"
+},
+"Plate pinch": {
+"img": [
+"img/ex/plate-pinch-0.webp",
+"img/ex/plate-pinch-1.webp"
+],
+"steps": [
+"Grab two wide-rimmed plates and put them together with the smooth sides facing outward",
+"Use your fingers to grip the outside part of the plate and your thumb for the other side thus holding both plates together. This is the starting position.",
+"Squeeze the plate with your fingers and thumb. Hold this position for as long as you can.",
+"Repeat for the recommended amount of sets prescribed in your program.",
+"Switch arms and repeat the movements."
+],
+"src": "Plate_Pinch"
+},
 "Glute bridge": {
 "img": [
 "img/ex/glute-bridge-0.webp",

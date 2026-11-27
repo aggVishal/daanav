@@ -22,7 +22,8 @@ A gym workout tracker: pick a body part, choose an exercise, log each set's weig
 - Share your finished workout (with your month calendar and streak) as an Instagram or WhatsApp story image
 - Profile photo (resized on the phone; Google photo used by default)
 - Asks Female / Male / Prefer not to say and orders body parts and exercises to suit (new Glutes day: hip thrust, glute bridge, kickbacks, sumo squat, abduction and more)
-- Opt-in leaderboard: days trained, week streak, PRs and volume, this week or this month
+- Home feed of your workouts with your week streak (Strava-style)
+- Trophy case: 29 Daanav trophies for showing up, consistency, strength, intensity and variety — you vs you
 - Share your weekly or monthly recap as a story image from the Progress tab
 - Back button / swipe-back works on every screen
 - Side menu with Account, Plans, Invite friends and Admin

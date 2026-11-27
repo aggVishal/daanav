@@ -4,7 +4,7 @@ const LAST="daanav-last-user",GUEST="daanav-guest";
 let authOpen=false;
 const isGuest=()=>!!(user&&user.guest);
 function guestFlag(){try{return localStorage.getItem(GUEST)==="1"}catch(e){return false}}
-function enterGuest(keepTab){try{localStorage.setItem(GUEST,"1")}catch(e){}user={id:"guest",guest:true,name:"",email:"",providers:[]};authOpen=false;authMsg="";if(keepTab!==true)tab="workout";loadCache();setSync("idle");render();window.scrollTo(0,0)}
+function enterGuest(keepTab){try{localStorage.setItem(GUEST,"1")}catch(e){}user={id:"guest",guest:true,name:"",email:"",providers:[]};authOpen=false;authMsg="";if(keepTab!==true)tab="home";loadCache();setSync("idle");render();window.scrollTo(0,0)}
 const LIB={
   Chest:["Bench press","Incline bench press","Dumbbell bench press","Incline dumbbell press","Machine chest press","Chest fly (machine)","Cable crossover","Push-ups","Dips"],
   Back:["Deadlift","Pull-ups","Lat pulldown","Barbell row","Seated cable row","Dumbbell row","T-bar row","Face pull"],
@@ -55,7 +55,7 @@ function applyTheme(t){
 }
 const blank=()=>({workouts:[],active:null,custom:{},profile:{},pending:{up:{},del:{},state:0}});
 let S=blank();
-let logDate=null,pastMins=60,tab="workout",period="week",pickPart=null,showAllParts=false,summary=null,openId=null,progEx=null,draft={w:"",r:""},msgText="",popSet=false;
+let logDate=null,pastMins=60,tab="home",period="week",pickPart=null,showAllParts=false,summary=null,openId=null,progEx=null,draft={w:"",r:""},msgText="",popSet=false;
 let authEmail="",authName="",pendingName="",authGender="",pendingGender="",ready=false,FB=null,fbAuth=null,fdb=null,user=null,authMode="signin",authMsg="",authBusy=false,syncState="idle",syncErr="",flushing=false,flushTimer=null,ver=1,bootError="";
 
 /* ---------- Local cache (per user) ---------- */
@@ -73,7 +73,7 @@ const hasPending=()=>Object.keys(S.pending.up).length+Object.keys(S.pending.del)
 function markUp(id){S.pending.up[id]=++ver;delete S.pending.del[id];queue()}
 function markDel(id){delete S.pending.up[id];S.pending.del[id]=1;queue()}
 function markState(){S.pending.state=++ver;queue()}
-function queue(){save();if(isGuest())return;lbSoon();setSync(navigator.onLine?"saving":"offline");clearTimeout(flushTimer);flushTimer=setTimeout(flush,700)}
+function queue(){save();if(isGuest())return;setSync(navigator.onLine?"saving":"offline");clearTimeout(flushTimer);flushTimer=setTimeout(flush,700)}
 
 /* ---------- Cloud sync (Firebase Cloud Firestore) ----------
    Data layout:  users/{uid}/workouts/{workoutId}   one document per finished workout
@@ -326,7 +326,8 @@ function viewProgress(){
   const chip=(v,lbl)=>v==null?'<em>no data for '+lbl+'</em>':'<em class="'+(v>=0?"up":"down")+'">'+(v>=0?"▲ ":"▼ ")+Math.abs(v)+'% vs '+lbl+'</em>';
   const lbl=period==="week"?"last week":"last month";
   let h='<div class="seg" role="tablist"><button class="'+(period==="week"?"on":"")+'" data-period="week">Weekly</button><button class="'+(period==="month"?"on":"")+'" data-period="month">Monthly</button></div>';
-  if(!S.workouts.length)return h+'<section class="card empty"><h3>No workouts yet</h3><p>Log your first workout and your progress shows up here.</p><button class="btn" data-tab-go="workout">Start a workout</button></section>';
+  if(!S.workouts.length)return h+trophyCase()+'<section class="card empty"><h3>No workouts yet</h3><p>Log your first workout and your progress shows up here.</p><button class="btn" data-tab-go="workout">Start a workout</button></section>';
+  h+=trophyCase();
   h+='<section class="card"><h3>'+(period==="week"?"This week":"This month")+'</h3><div class="tiles">'+
     tile("New PRs",prsIn(cur),'<em>heavier than ever before</em>')+tile("Workouts",c.n,chip(ch(c.n,p.n),lbl))+
     tile("Sets",c.sets,chip(ch(c.sets,p.sets),lbl))+tile("Volume (kg)",fmt(c.vol),'<em class="note">weight × reps</em>'+chip(ch(c.vol,p.vol),lbl))+'</div>'+
@@ -377,28 +378,137 @@ function drawChart(){
 const ro=new ResizeObserver(drawChart);
 
 /* ---------- History ---------- */
-function viewHistory(){
-  setHead("History","Every session");
-  const ws=sorted().reverse();
-  let h='<button class="card pastbtn" data-act="logpast"><span class="pbi" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M12 13v4M10 15h4"/></svg></span>'+
-    '<span class="pbt"><b>Log a past workout</b><small>Forgot to log a session? Add it for any earlier day.</small></span><span class="go" aria-hidden="true">›</span></button>';
-  if(!ws.length)h+='<section class="card empty"><h3>Nothing here yet</h3><p>Finished workouts show up here by date.</p><button class="btn" data-tab-go="workout">Start a workout</button></section>';
-  let m="";
+/* ---------- Trophies: "you vs you" achievements, earned from your own history ---------- */
+const TI={ // trophy glyphs (stroke icons)
+  flame:'<path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-3 2-4 2-7 1.5 1 3 2.5 3 5"/>',
+  crown:'<path d="M4 18h16M5 18 3.5 8l5 4L12 5l3.5 7 5-4L19 18"/>',
+  bolt:'<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>',
+  mountain:'<path d="M3 20 10 8l4 6 2-3 5 9z"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/>',
+  moon:'<path d="M20 14A8 8 0 1 1 10 4a6 6 0 0 0 10 10z"/>',
+  star:'<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
+  shield:'<path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/>',
+  wheel:'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2"/><path d="M12 4v6M12 14v6M4 12h6M14 12h6"/>',
+  rise:'<path d="M4 18 10 12l4 4 6-8"/><path d="M15 8h5v5"/>',
+  clock:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
+  phoenix:'<path d="M12 21c-4-2-7-6-6-11 2 2 4 2 6 0 2 2 4 2 6 0 1 5-2 9-6 11z"/><path d="M12 10V4"/>',
+  db:'<path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/>'
+};
+const TROPHIES=[
+  // Showing up
+  {id:"awaken",cat:"Showing up",icon:"db",name:"Daanav Awakens",desc:"Finish your first workout",goal:1,val:s=>s.n},
+  {id:"w10",cat:"Showing up",icon:"star",name:"Rising Daanav",desc:"Finish 10 workouts",goal:10,val:s=>s.n},
+  {id:"w25",cat:"Showing up",icon:"shield",name:"Daanav Yoddha",desc:"Finish 25 workouts",goal:25,val:s=>s.n},
+  {id:"w50",cat:"Showing up",icon:"shield",name:"Daanav Senapati",desc:"Finish 50 workouts",goal:50,val:s=>s.n},
+  {id:"w100",cat:"Showing up",icon:"crown",name:"Daanav Raja",desc:"Finish 100 workouts",goal:100,val:s=>s.n},
+  {id:"w250",cat:"Showing up",icon:"crown",name:"Maha Daanav",desc:"Finish 250 workouts",goal:250,val:s=>s.n},
+  // Consistency
+  {id:"s2",cat:"Consistency",icon:"flame",name:"First Spark",desc:"Train 2 weeks in a row",goal:2,val:s=>s.bestRun},
+  {id:"s4",cat:"Consistency",icon:"flame",name:"Agni Streak",desc:"Train 4 weeks in a row",goal:4,val:s=>s.bestRun},
+  {id:"s12",cat:"Consistency",icon:"flame",name:"Tapasya",desc:"Train 12 weeks in a row",goal:12,val:s=>s.bestRun},
+  {id:"s26",cat:"Consistency",icon:"flame",name:"Akhand Daanav",desc:"Train 26 weeks in a row",goal:26,val:s=>s.bestRun},
+  {id:"s52",cat:"Consistency",icon:"crown",name:"Amar Daanav",desc:"Train every week for a year",goal:52,val:s=>s.bestRun},
+  {id:"m12",cat:"Consistency",icon:"sun",name:"Maas Daanav",desc:"Train 12 days in one month",goal:12,val:s=>s.bestMonth},
+  {id:"m20",cat:"Consistency",icon:"sun",name:"Nitya Daanav",desc:"Train 20 days in one month",goal:20,val:s=>s.bestMonth},
+  {id:"back",cat:"Consistency",icon:"phoenix",name:"Punar Janma",desc:"Come back after 2+ weeks off",goal:1,val:s=>s.comebacks},
+  // Strength
+  {id:"pr1",cat:"Strength",icon:"bolt",name:"Pehli Vijay",desc:"Set your first personal record",goal:1,val:s=>s.prs},
+  {id:"pr10",cat:"Strength",icon:"bolt",name:"Vijay Daanav",desc:"Set 10 personal records",goal:10,val:s=>s.prs},
+  {id:"pr25",cat:"Strength",icon:"bolt",name:"Digvijay",desc:"Set 25 personal records",goal:25,val:s=>s.prs},
+  {id:"pr50",cat:"Strength",icon:"crown",name:"Chakravarti",desc:"Set 50 personal records",goal:50,val:s=>s.prs},
+  {id:"g10",cat:"Strength",icon:"rise",name:"Shakti Surge",desc:"Grow any lift's 1-rep max by 10%",goal:10,val:s=>Math.floor(s.bestGain),unit:"%"},
+  {id:"g25",cat:"Strength",icon:"rise",name:"Dugni Shakti",desc:"Grow any lift's 1-rep max by 25%",goal:25,val:s=>Math.floor(s.bestGain),unit:"%"},
+  // Intensity
+  {id:"v5k",cat:"Intensity",icon:"mountain",name:"Bhaari Din",desc:"Lift 5,000 kg in one workout",goal:5000,val:s=>s.maxVol,unit:"kg"},
+  {id:"v10k",cat:"Intensity",icon:"mountain",name:"Parvat Uthao",desc:"Lift 10,000 kg in one workout",goal:10000,val:s=>s.maxVol,unit:"kg"},
+  {id:"l1",cat:"Intensity",icon:"mountain",name:"Lakh Kilo Daanav",desc:"Lift 1,00,000 kg in total",goal:100000,val:s=>s.vol,unit:"kg"},
+  {id:"l10",cat:"Intensity",icon:"crown",name:"Das Lakh Daanav",desc:"Lift 10,00,000 kg in total",goal:1000000,val:s=>s.vol,unit:"kg"},
+  {id:"long",cat:"Intensity",icon:"clock",name:"Dheeraj",desc:"Train for 90 minutes in one go",goal:90,val:s=>s.maxMins,unit:"min"},
+  // Variety & timing
+  {id:"sarva",cat:"Variety",icon:"wheel",name:"Sarva Anga",desc:"Train 5 body parts in one week",goal:5,val:s=>s.bestWeekParts},
+  {id:"astra",cat:"Variety",icon:"wheel",name:"Astra Collector",desc:"Do 20 different exercises",goal:20,val:s=>s.exCount},
+  {id:"dawn",cat:"Variety",icon:"sun",name:"Brahma Muhurta",desc:"Start a workout before 7 am",goal:1,val:s=>s.early},
+  {id:"night",cat:"Variety",icon:"moon",name:"Raatri Daanav",desc:"Start a workout after 9 pm",goal:1,val:s=>s.late}
+];
+/* Replays your workouts in date order and records the day each trophy was first earned. */
+function trophyState(list){
+  const ws=(list||S.workouts).slice().sort((a,b)=>a.date.localeCompare(b.date)||(a.start||0)-(b.start||0));
+  const s={n:0,bestRun:0,bestMonth:0,comebacks:0,prs:0,bestGain:0,maxVol:0,vol:0,maxMins:0,bestWeekParts:0,exCount:0,early:0,late:0};
+  const best={},first1={},max1={},months={},weekParts={},exs=new Set(),earned={};
+  let run=0,lastWk=null,lastDate=null;
   for(const w of ws){
-    const mk=monthOf(w.date);
-    if(mk!==m){m=mk;const mw=ws.filter(x=>monthOf(x.date)===mk);
-      h+='<p class="month">'+parse(mk+"-01").toLocaleDateString(undefined,{month:"long",year:"numeric"})+' · '+mw.length+' workout'+(mw.length>1?"s":"")+' · '+fmt(mw.reduce((a,x)=>a+volOf(x),0))+' kg</p>'}
-    const open=openId===w.id;
-    h+='<section class="card"><button class="wk" data-open="'+w.id+'" aria-expanded="'+open+'"><span class="top"><b>'+esc(w.parts.join(" + "))+'</b><span>'+long(w.date)+'</span></span><p class="num">'+
-      w.ex.length+' exercise'+(w.ex.length>1?"s":"")+' · '+pl(allSets(w).length,"set")+' · '+fmt(volOf(w))+' kg</p></button>';
-    if(open){
-      h+='<div class="detail">'+w.ex.map(e=>'<div><b>'+esc(e.name)+'</b><span class="num">'+e.sets.map(s=>wl(s.w)+" × "+s.r).join(" · ")+'</span></div>').join("")+
-        '<div class="row" style="margin-top:8px"><button class="btn ghost" data-delw="'+w.id+'">Delete workout</button></div></div>';
-    }
+    s.n++;const wk=weekOf(w.date);
+    if(wk!==lastWk){let nx=null;if(lastWk){const p=parse(lastWk);p.setDate(p.getDate()+7);nx=dkey(p)}run=nx===wk?run+1:1;lastWk=wk}
+    s.bestRun=Math.max(s.bestRun,run);
+    if(lastDate&&(parse(w.date)-parse(lastDate))/864e5>=14)s.comebacks++;
+    if(lastDate!==w.date){const mo=monthOf(w.date);months[mo]=(months[mo]||0)+1;s.bestMonth=Math.max(s.bestMonth,months[mo])}
+    lastDate=w.date;
+    (weekParts[wk]=weekParts[wk]||new Set());(w.parts||[]).forEach(p=>weekParts[wk].add(p));s.bestWeekParts=Math.max(s.bestWeekParts,weekParts[wk].size);
+    const v=volOf(w);s.vol+=v;s.maxVol=Math.max(s.maxVol,v);
+    if(w.start&&w.end&&w.end>w.start)s.maxMins=Math.max(s.maxMins,Math.round((w.end-w.start)/60000));
+    if(w.start){const hr=new Date(w.start).getHours();if(hr<7&&hr>=3)s.early=1;if(hr>=21)s.late=1}
+    for(const e of w.ex||[]){exs.add(e.name);
+      let top=0;for(const st of e.sets||[]){top=Math.max(top,+st.w||0);if(st.w>0){const r=e1rm(st);if(first1[e.name]==null)first1[e.name]=r;max1[e.name]=Math.max(max1[e.name]||0,r);
+        if(first1[e.name]>0)s.bestGain=Math.max(s.bestGain,(max1[e.name]/first1[e.name]-1)*100)}}
+      const b=best[e.name]||0;if(b>0&&top>b)s.prs++;if(top>b)best[e.name]=top}
+    s.exCount=exs.size;
+    for(const t of TROPHIES)if(!earned[t.id]&&t.val(s)>=t.goal)earned[t.id]=w.date;
+  }
+  return{s,earned};
+}
+function trophyIcon(t,cls){return '<span class="tro-i'+(cls?" "+cls:"")+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(TI[t.icon]||TI.star)+'</svg></span>'}
+let trophyCat="All";
+function trophyCase(){
+  const {s,earned}=trophyState(),got=TROPHIES.filter(t=>earned[t.id]).length,cats=["All",...new Set(TROPHIES.map(t=>t.cat))];
+  const list=TROPHIES.filter(t=>trophyCat==="All"||t.cat===trophyCat).slice().sort((a,b)=>(!!earned[b.id])-(!!earned[a.id])||(earned[b.id]||"").localeCompare(earned[a.id]||"")||(Math.min(1,a.val(s)/a.goal)<Math.min(1,b.val(s)/b.goal)?1:-1));
+  let h='<section class="card trophies" id="trophies"><div class="tro-head"><h3>Trophy case</h3><span class="tro-count"><b>'+got+'</b>/'+TROPHIES.length+'</span></div>'+
+    '<p class="sub">You vs you. Every trophy is earned from your own training: showing up, staying consistent and getting stronger.</p>'+
+    '<div class="admtabs">'+cats.map(c=>'<button class="chip'+(trophyCat===c?' on':'')+'" data-trocat="'+c+'">'+c+'</button>').join("")+'</div><div class="tro-grid">';
+  for(const t of list){const e=earned[t.id],v=Math.min(t.val(s),t.goal),pct=Math.round(v/t.goal*100);
+    h+='<div class="tro'+(e?' got':'')+'">'+trophyIcon(t)+'<b>'+esc(t.name)+'</b><small>'+esc(t.desc)+'</small>'+
+      (e?'<em class="tro-date">Earned '+short(e)+'</em>':'<span class="tro-bar" aria-label="'+pct+'% done"><i style="width:'+pct+'%"></i></span><em class="tro-p">'+(t.unit==="kg"?fmt(Math.round(v)):v)+' / '+(t.unit==="kg"?fmt(t.goal):t.goal)+(t.unit?' '+t.unit:'')+'</em>')+'</div>'}
+  return h+'</div></section>';
+}
+function newTrophies(before,after){return TROPHIES.filter(t=>after[t.id]&&!before[t.id])}
+
+/* ---------- Home: streak + your activity feed ---------- */
+let homeShow=15;
+function timeOfDay(w){if(!w.start)return"";const h=new Date(w.start).getHours();return h<5?"Night":h<12?"Morning":h<17?"Afternoon":h<21?"Evening":"Night"}
+function relDay(k){const t=dkey(new Date()),y=new Date();y.setDate(y.getDate()-1);if(k===t)return"Today";if(k===dkey(y))return"Yesterday";return long(k)}
+function viewHome(){
+  setHead("Home","Your training");
+  const ws=sorted().reverse(),st=weekStreak(),today=dkey(new Date()),wk=weekOf(today),days=[0,0,0,0,0,0,0];
+  S.workouts.filter(x=>weekOf(x.date)===wk).forEach(x=>{days[(parse(x.date).getDay()+6)%7]=1});
+  const nWeek=S.workouts.filter(x=>weekOf(x.date)===wk).length,ti=(parse(today).getDay()+6)%7;
+  let h=(gender()?'':genderCard())+(user.name||isGuest()?'':nameCard(true));
+  if(S.active)h+='<button class="card resume" data-tab-go="workout"><span class="pbi" aria-hidden="true">'+actIcon("gym")+'</span><span class="pbt"><b>Workout in progress</b><small>'+esc(S.active.parts.join(" + "))+' · '+pl(S.active.ex.reduce((a,e)=>a+e.sets.length,0),"set")+' so far</small></span><span class="go" aria-hidden="true">›</span></button>';
+  h+='<section class="card streak-hero"><div class="sh-top"><div><span class="sh-n num">'+st+'</span><span class="sh-l">week<br>streak</span></div>'+
+    '<div class="sh-side"><b class="num">'+nWeek+'</b><small>'+(nWeek===1?"workout":"workouts")+' this week</small><b class="num">'+monthDays(monthOf(today))+'</b><small>days this month</small></div></div>'+
+    '<div class="sh-week">'+["M","T","W","T","F","S","S"].map((l,i)=>'<span class="'+(days[i]?"on":"")+(i===ti?" today":"")+'"><i>'+(days[i]?actIcon("gym"):"")+'</i><small>'+l+'</small></span>').join("")+'</div>'+
+    '<p class="sub sh-msg">'+(nWeek?(st>1?"You’ve trained "+st+" weeks in a row. Keep the chain going.":"Nice! This week counts toward your streak."):(st?"Train this week to keep your "+st+"-week streak alive.":"One workout this week starts your streak."))+'</p></section>';
+  const {earned}=trophyState(),recent=TROPHIES.filter(t=>earned[t.id]).sort((a,b)=>earned[b.id].localeCompare(earned[a.id])).slice(0,3);
+  if(recent.length)h+='<button class="card tro-strip" data-tab-go="progress" data-scroll="trophies"><span class="tsl">Latest trophies</span><span class="tsr">'+recent.map(t=>trophyIcon(t,"sm")).join("")+'</span><span class="tsn">'+esc(recent[0].name)+'</span><span class="go" aria-hidden="true">›</span></button>';
+  h+='<div class="feedhead"><h3>Your activity</h3><button class="link" data-act="logpast">+ Log a past workout</button></div>';
+  if(!ws.length)return h+'<section class="card empty"><h3>No workouts yet</h3><p>Your finished workouts show up here, newest first.</p><button class="btn" data-tab-go="workout">Start your first workout</button></section>';
+  const prSet=prMap();
+  for(const w of ws.slice(0,homeShow)){
+    const open=openId===w.id,mins=w.start&&w.end&&w.end>w.start?Math.round((w.end-w.start)/60000):0,prs=prSet[w.id]||[];
+    const tod=timeOfDay(w),title=(tod?tod+" ":"")+w.parts.join(" + ");
+    h+='<section class="card act'+(open?' open':'')+'"><button class="wk" data-open="'+w.id+'" aria-expanded="'+open+'">'+
+      '<span class="act-h">'+avHtml(isGuest()?"G":(user.name||user.email),myPhoto(),"sm")+'<span><b>'+esc(firstName()||"You")+'</b><small>'+relDay(w.date)+'</small></span></span>'+
+      '<span class="act-t">'+esc(title)+'</span>'+
+      '<span class="act-s"><span><small>Time</small><b class="num">'+(mins?mins+' min':'–')+'</b></span><span><small>Sets</small><b class="num">'+allSets(w).length+'</b></span><span><small>Volume</small><b class="num">'+fmt(volOf(w))+' kg</b></span>'+(prs.length?'<span class="hot"><small>PRs</small><b class="num">'+prs.length+'</b></span>':'')+'</span>'+
+      '<span class="act-x">'+w.ex.slice(0,open?99:3).map(e=>{const t=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);
+        return '<span><i>'+esc(e.name)+(prs.includes(e.name)?' <em class="prb">PR</em>':'')+'</i><b class="num">'+(open?e.sets.map(s=>wl(s.w)+"×"+s.r).join(" · "):pl(e.sets.length,"set")+' · best '+(t.w?wl(t.w):"BW")+'×'+t.r)+'</b></span>'}).join("")+
+      (!open&&w.ex.length>3?'<span class="more">+'+(w.ex.length-3)+' more</span>':'')+'</span></button>';
+    if(open)h+='<div class="row act-a"><button class="btn ghost" data-delw="'+w.id+'">Delete workout</button></div>';
     h+='</section>';
   }
+  if(ws.length>homeShow)h+='<button class="btn ghost wide" data-act="homemore">Show older workouts</button>';
   return h;
 }
+/* PRs per workout id (heavier top set than ever before for that exercise). */
+function prMap(){const best={},out={};for(const w of sorted())for(const e of w.ex){const top=Math.max(0,...e.sets.map(s=>+s.w||0)),b=best[e.name]||0;if(b>0&&top>b)(out[w.id]=out[w.id]||[]).push(e.name);if(top>b)best[e.name]=top}return out}
 
 /* ---------- Render & actions ---------- */
 /* ---------- Account ---------- */
@@ -457,7 +567,6 @@ function removePhoto(){const p=Object.assign({},S.profile);delete p.photo;S.prof
 async function pushPhoto(){
   if(!fdb||!user||isGuest()||!navigator.onLine)return;const ph=safePhoto(myPhoto());
   try{await timeout(FB.setDoc(FB.doc(fdb,"users",user.id),{photo:ph},{merge:true}),10000)}catch(e){}
-  if(lbJoined())try{await timeout(FB.setDoc(FB.doc(fdb,"leaderboard",user.id),{photo:ph},{merge:true}),10000)}catch(e){}
 }
 function photoBlock(name){
   const has=!!(S.profile&&S.profile.photo);
@@ -643,10 +752,11 @@ function render(){
   if(tab==="admin"&&!isAdmin())tab="account";
   if(tab==="invite"&&(isGuest()||!(CONF.referral.enabled||isAdmin())))tab="account";
   if(tab==="plans"&&!(CONF.pricing.enabled||isAdmin()))tab="account";
-  const v=tab==="leaderboard"?viewLeaderboard():tab==="workout"?viewWorkout():tab==="progress"?viewProgress():tab==="history"?viewHistory():tab==="admin"?viewAdmin():tab==="plans"?viewPlans():tab==="invite"?viewInvite():viewAccount();
+  if(!TABS.includes(tab))tab="home";
+  const v=tab==="home"?viewHome():tab==="workout"?viewWorkout():tab==="progress"?viewProgress():tab==="admin"?viewAdmin():tab==="plans"?viewPlans():tab==="invite"?viewInvite():viewAccount();
   const ann=CONF.general.announcement&&tab!=="admin"?'<section class="card announce" role="status">'+esc(CONF.general.announcement)+'</section>':'';
-  app.innerHTML=ann+(isGuest()&&!["account","plans"].includes(tab)?guestBanner(tab!=="workout"):'')+v;
-  fitText(app);syncUrl();
+  app.innerHTML=ann+(isGuest()&&!["account","plans"].includes(tab)?guestBanner(tab!=="home"):'')+v;
+  fitText(app);syncUrl();document.body.classList.toggle("lifting",!!S.active);
   document.querySelectorAll("nav button").forEach(b=>{b.classList.toggle("on",b.dataset.tab===tab);b.setAttribute("aria-current",b.dataset.tab===tab?"page":"false")});
   ro.disconnect();const f=document.getElementById("fig");if(f){ro.observe(f);drawChart()}
   msgText="";
@@ -658,13 +768,13 @@ function navPush(extra){try{NAV.pushState(Object.assign({tab},extra||{}),"")}cat
 function navReplace(st){try{NAV.replaceState(st,"")}catch(e){}}
 function navPopIf(key,val){if(navState()[key]===val){skipPop++;NAV.back()}}
 /* Keep the current screen in the address (#progress, #admin/users …) so a refresh reopens it. */
-const TABS=["workout","progress","history","leaderboard","account","plans","invite","admin"];
+const TABS=["home","workout","progress","account","plans","invite","admin"];
 let bootAdmSub="";
-{const h0=decodeURIComponent(location.hash.slice(1)).split("/");if(TABS.includes(h0[0])){tab=h0[0];bootAdmSub=h0[1]||""}}
+{const h0=decodeURIComponent(location.hash.slice(1)).split("/");if(h0[0]==="history"||h0[0]==="leaderboard")h0[0]="home";if(TABS.includes(h0[0])){tab=h0[0];bootAdmSub=h0[1]||""}}
 try{NAV.replaceState({tab,root:1},"")}catch(e){}
 function syncUrl(){
   let sub="";if(tab==="admin")try{sub="/"+admSub}catch(e){}
-  const want=tab==="workout"?"":"#"+tab+sub;
+  const want=tab==="home"?"":"#"+tab+sub;
   if(location.hash!==want)try{NAV.replaceState(NAV.state,"",want||location.pathname+location.search)}catch(e){}
 }
 addEventListener("popstate",e=>{
@@ -679,10 +789,10 @@ addEventListener("popstate",e=>{
   if(isGuest()&&authOpen){authOpen=false;authMsg="";render();return}
   const A=S.active;
   if(A&&A.cur!=null&&tab==="workout"&&!st.ex){cleanActive();markState();render();window.scrollTo(0,0);return}
-  const t=st.tab||"workout";
+  const t=st.tab||"home";
   if(t!==tab)go(t,true);else render();
 });
-function goBack(){const s=navState();if(!s.root&&s.tab===tab)NAV.back();else go("workout")}
+function goBack(){const s=navState();if(!s.root&&s.tab===tab)NAV.back();else go("home")}
 function go(t,noPush){if(!noPush&&t!==tab)try{NAV.pushState({tab:t},"")}catch(e){}tab=t;render();window.scrollTo(0,0);app.classList.remove("enter");void app.offsetWidth;app.classList.add("enter");clearTimeout(go.t);go.t=setTimeout(()=>app.classList.remove("enter"),700)}
 function startWorkout(p){
   const today=dkey(new Date()),past=logDate&&logDate<today?logDate:null;
@@ -813,6 +923,7 @@ function showCele(){
     '<div class="stat hot up1 d3"><span>New PRs</span><b data-to="'+d.prs.length+'">0</b></div></div>'+
     (d.prs.length?'<div class="prs up1 d4">'+d.prs.slice(0,3).map(p=>'<div><span>'+esc(p.name)+'</span><b>'+wl(p.w)+' × '+p.r+' · +'+kg(p.delta)+' kg</b></div>').join("")+'</div>':'')+
     '<div class="week up1 d5">'+(d.week===1?"1st":d.week===2?"2nd":d.week===3?"3rd":d.week+"th")+' workout '+(d.past&&weekOf(d.date)!==weekOf(dkey(new Date()))?"that week":"this week")+dots+'<div class="streak"><span><b>'+d.streak+'</b> week streak</span><span><b>'+d.monthDays+'</b> '+(d.monthDays===1?"day":"days")+' in '+esc(monthName(monthOf(d.date),{month:"long"}))+'</span></div></div>'+
+    ((d.trophies||[]).length?'<div class="tro-won up1 d5"><span class="tw-l">Trophy unlocked</span>'+d.trophies.map(t=>'<div class="tw">'+trophyIcon(t)+'<span><b>'+esc(t.name)+'</b><small>'+esc(t.desc)+'</small></span></div>').join("")+'</div>':'')+
     '<div class="acts up1 d5"><button class="btn wide sharebtn" data-cele="share">'+SHARE_ICON+'Share to your story</button><button class="btn wide ghostc" data-cele="done">Done</button><button class="link" data-cele="replay">Replay celebration</button></div></div>';
   el.hidden=false;document.body.classList.add("celebrating");el.scrollTop=0;
   el.setAttribute("aria-labelledby","celeTitle");
@@ -824,7 +935,7 @@ function showCele(){
   try{if(navigator.vibrate)navigator.vibrate([30,40,60])}catch(e){}
   setTimeout(()=>{const b=el.querySelector('[data-cele="done"]');if(b)b.focus({preventScroll:true})},1600);
 }
-function closeCele(fromPop){if(fromPop!==true)navPopIf("ov","cele");const el=document.getElementById("cele");el.hidden=true;el.innerHTML="";document.body.classList.remove("celebrating");cancelAnimationFrame(celeRaf);go("workout",true)}
+function closeCele(fromPop){if(fromPop!==true)navReplace({tab:"home"});const el=document.getElementById("cele");el.hidden=true;el.innerHTML="";document.body.classList.remove("celebrating");cancelAnimationFrame(celeRaf);openId=null;go(fromPop===true?(navState().tab||"home"):"home",true);window.scrollTo(0,0)}
 document.getElementById("cele").addEventListener("click",e=>{const b=e.target.closest("[data-cele]");if(!b)return;if(b.dataset.cele==="done")closeCele();else if(b.dataset.cele==="share")openShare(workoutSpec(celeData));else{celeRun++;showCele()}});
 
 /* ---------- Share workout as an Instagram / WhatsApp story image ---------- */
@@ -843,7 +954,7 @@ function workoutSpec(d){
   return{dateLabel:long(d.date).toUpperCase(),kicker:(d.parts.join(" + ")+" DAY").toUpperCase(),
     stats:[["LIFTED",fmt(d.vol),"kg"],["SETS",String(d.sets),""],["TIME",String(d.mins),"min"],["PRs",String(d.prs.length),"",d.prs.length>0]],
     ym:monthOf(d.date),cal:d.cal||[],mark:[+d.date.slice(8)],streak:d.streak,monthDays:d.monthDays,
-    rows:(d.ex||[]).slice().sort((a,b)=>prN.has(b.name)-prN.has(a.name)).slice(0,4).map(r=>({name:r.name,right:(r.w?kg(r.w)+" kg":"BW")+" × "+r.r,badge:prN.has(r.name)?"PR":""}))};
+    rows:(d.trophies||[]).map(t=>({name:t.name,right:"",badge:"TROPHY"})).concat((d.ex||[]).slice().sort((a,b)=>prN.has(b.name)-prN.has(a.name)).slice(0,4).map(r=>({name:r.name,right:(r.w?kg(r.w)+" kg":"BW")+" × "+r.r,badge:prN.has(r.name)?"PR":""})))};
 }
 async function drawStory(sp){
   const t=curTheme(),P=STORY[t],W=1080,H=1920,BODY="{s}px Inter,Barlow,sans-serif";
@@ -956,13 +1067,15 @@ function finish(){
   for(const e of A.ex){const b=bestW(e.name,A.id);if(b>0&&Math.max(...e.sets.map(s=>s.w))>b){prs++;prList.push(e.name)}}
   const w={id:A.id,date:A.date,start:A.start,end:A.past?A.start+A.mins*60000:Date.now(),parts:A.parts.filter(p=>A.ex.some(e=>e.part===p)),ex:A.ex};
   if(!w.parts.length)w.parts=A.parts;
+  const troBefore=trophyState().earned;
   S.workouts.push(w);S.active=null;
+  const troWon=newTrophies(troBefore,trophyState().earned).map(t=>({name:t.name,desc:t.desc,icon:t.icon}));
   const prDetail=[];
   for(const e of w.ex){const b=bestW(e.name,w.id,w.date),top=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);if(b>0&&top.w>b)prDetail.push({name:e.name,w:top.w,r:top.r,delta:top.w-b})}
   const wk=weekOf(w.date),inWeek=S.workouts.filter(x=>weekOf(x.date)===wk),days=[0,0,0,0,0,0,0];
   inWeek.forEach(x=>{days[(parse(x.date).getDay()+6)%7]=1});
   markUp(w.id);markState();
-  celebrate({past:!!A.past,date:w.date,vol:volOf(w),sets:allSets(w).length,mins:Math.max(1,Math.round((w.end-(w.start||w.end))/60000)),prs:prDetail,parts:w.parts,week:inWeek.length,days,streak:weekStreak(),monthDays:monthDays(monthOf(w.date)),cal:[...trainedDays()].filter(k=>k.slice(0,7)===monthOf(w.date)).map(k=>+k.slice(8)),ex:w.ex.map(e=>{const t=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);return{name:e.name,w:t.w,r:t.r,n:e.sets.length}}),dayName:parse(w.date).toLocaleDateString(undefined,{weekday:"long"})});
+  celebrate({trophies:troWon,past:!!A.past,date:w.date,vol:volOf(w),sets:allSets(w).length,mins:Math.max(1,Math.round((w.end-(w.start||w.end))/60000)),prs:prDetail,parts:w.parts,week:inWeek.length,days,streak:weekStreak(),monthDays:monthDays(monthOf(w.date)),cal:[...trainedDays()].filter(k=>k.slice(0,7)===monthOf(w.date)).map(k=>+k.slice(8)),ex:w.ex.map(e=>{const t=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);return{name:e.name,w:t.w,r:t.r,n:e.sets.length}}),dayName:parse(w.date).toLocaleDateString(undefined,{weekday:"long"})});
   render();
 }
 app.addEventListener("click",e=>{
@@ -973,7 +1086,8 @@ app.addEventListener("click",e=>{
   if(d.zoom){const A2=S.active;if(A2&&A2.ex[A2.cur])openZoom(A2.ex[A2.cur].name,A2.ex[A2.cur].part);return}
   if(d.themepick){applyTheme(d.themepick);S.profile=Object.assign({},S.profile,{theme:d.themepick});markState();render();return}
   if(d.start){startWorkout(d.start);return}
-  if(d.tabGo){go(d.tabGo);return}
+  if(d.tabGo){go(d.tabGo);if(d.scroll)setTimeout(()=>{const el=document.getElementById(d.scroll);if(el)el.scrollIntoView({block:"start",behavior:"smooth"})},50);return}
+  if(d.trocat){trophyCat=d.trocat;render();return}
   if(d.pick){pickPart=d.pick;render();return}
   if(d.addpart){A.parts.push(d.addpart);pickPart=d.addpart;showAllParts=false;markState();render();return}
   if(d.ex){openEx(d.ex,d.part);return}
@@ -981,11 +1095,9 @@ app.addEventListener("click",e=>{
   if(d.delset!=null){A.ex[A.cur].sets.splice(+d.delset,1);markState();render();return}
   if(d.period){period=d.period;render();return}
   if(d.open){openId=openId===d.open?null:d.open;render();return}
-  if(d.lbp){lbPeriod=d.lbp;render();return}
   if(d.gender){const first=!gender();S.profile=Object.assign({},S.profile,{gender:d.gender});markState();render();if(first&&tab==="workout")toast("Thanks! Your exercises are set up.",null);return}
-  if(d.lbm){lbMetric=d.lbm;render();return}
   if(d.calm){const[y,m]=calYm.split("-").map(Number),nd=new Date(y,m-1+(+d.calm),1);calYm=nd.getFullYear()+"-"+pad(nd.getMonth()+1);render();return}
-  if(d.calday){const w=S.workouts.find(x=>x.date===d.calday);if(w){openId=w.id;go("history");setTimeout(()=>{const el=document.querySelector('[data-open="'+w.id+'"]');if(el)el.scrollIntoView({block:"center"})},60)}return}
+  if(d.calday){const w=S.workouts.find(x=>x.date===d.calday);if(w){openId=w.id;go("home");setTimeout(()=>{const el=document.querySelector('[data-open="'+w.id+'"]');if(el)el.scrollIntoView({block:"center"})},60)}return}
   if(d.delw){
     const w=S.workouts.find(x=>x.id===d.delw);if(!w)return;
     S.workouts=S.workouts.filter(x=>x!==w);openId=null;markDel(w.id);render();
@@ -1004,9 +1116,8 @@ app.addEventListener("click",e=>{
     case"syncnow":setSync("saving");syncNow();break;
     case"signout":signOut();break;
     case"shareinvite":shareInvite();break;
-    case"lbjoin":lbJoin();break;
+    case"homemore":homeShow+=15;render();break;
     case"rmphoto":removePhoto();break;
-    case"lbleave":lbLeave();break;
     case"pickdate":openDatePicker(b.dataset.for);break;
     case"sharerecap":{const sp=recapSpec(period);if(!sp.count){toast("Log a workout "+(period==="week"?"this week":"this month")+" first",null);break}openShare(sp);break}
     case"guesttry":enterGuest();break;
@@ -1051,7 +1162,7 @@ async function signOut(){
   if(hasPending()&&navigator.onLine){setSync("saving");try{await timeout(flush(),6000)}catch(e){}}
   const id=user&&user.id;
   try{if(id)localStorage.removeItem("daanav-v1:"+id);localStorage.removeItem(LAST)}catch(e){}
-  user=null;S=blank();tab="workout";summary=null;authMode="signin";authMsg="You’ve signed out.";setSync("idle");render();
+  user=null;S=blank();tab="home";summary=null;authMode="signin";authMsg="You’ve signed out.";setSync("idle");render();
   try{if(fbAuth)await FB.signOut(fbAuth)}catch(e){}
 }
 /* Move workouts logged in trial mode into the account the person just signed up / in with. */
@@ -1081,76 +1192,13 @@ function handleSession(u){
   authMsg="";render();
   syncNow();
   setTimeout(()=>touchProfile(u.created),1500);
-  lbRows=null;lbLoaded=false;lbLast="";setTimeout(()=>lbPublish(),4000);
+  setTimeout(()=>lbCleanup(),4000);
 }
-/* ---------- Leaderboard (opt-in): each member publishes a small summary to leaderboard/{uid} ---------- */
-let lbPeriod="week",lbMetric="days",lbRows=null,lbLoaded=false,lbBusy=false,lbMsg="",lbTimer=null,lbLast="";
-const lbJoined=()=>!!(S.profile&&S.profile.lb);
-const LB_METRICS=[["days","Days trained","days"],["streak","Streak","weeks"],["prs","PRs","PRs"],["vol","Volume","kg"]];
-function prsWhere(pred){const best={},hit=new Set();for(const w of sorted())for(const e of w.ex)for(const s of e.sets){const b=best[e.name]||0;if(pred(w)&&b>0&&s.w>b)hit.add(e.name);if(s.w>b)best[e.name]=s.w}return hit.size}
-function lbName(){const n=(user&&user.name||"").trim().split(/\s+/);return n[0]?(n[0]+(n[1]?" "+n[1][0].toUpperCase()+".":"")).slice(0,24):"Lifter"}
-function lbSummary(){
-  const today=dkey(new Date()),wk=weekOf(today),mo=monthOf(today),pw=w=>weekOf(w.date)===wk,pm=w=>monthOf(w.date)===mo;
-  const f=pred=>{const ws=S.workouts.filter(pred);return{d:new Set(ws.map(w=>w.date)).size,n:ws.length,v:Math.round(ws.reduce((a,w)=>a+volOf(w),0))}},a=f(pw),b=f(pm);
-  return{name:lbName(),wk,wDays:a.d,wWorkouts:a.n,wVol:a.v,wPRs:prsWhere(pw),mo,mDays:b.d,mWorkouts:b.n,mVol:b.v,mPRs:prsWhere(pm),streak:weekStreak(),streakWk:wk};
-}
-function lbSoon(){if(!lbJoined()||isGuest())return;clearTimeout(lbTimer);lbTimer=setTimeout(lbPublish,3000)}
-async function lbPublish(force){
-  if(!fdb||!user||isGuest()||!lbJoined()||!navigator.onLine)return;
-  const sum=lbSummary(),sig=JSON.stringify(sum);if(!force&&sig===lbLast)return;
-  try{await timeout(FB.setDoc(FB.doc(fdb,"leaderboard",user.id),Object.assign(sum,{updatedAt:stamp()}),{merge:true}),10000);lbLast=sig;
-    if(lbRows){lbRows=lbRows.filter(r=>r.id!==user.id).concat([Object.assign({id:user.id},lbSummary())]);if(tab==="leaderboard")render()}}catch(e){}
-}
-async function lbLoad(){
-  if(lbLoaded||!fdb||isGuest())return;lbLoaded=true;
-  try{const qs=await timeout(FB.getDocs(FB.collection(fdb,"leaderboard")),12000);lbRows=qs.docs.map(d=>Object.assign({id:d.id},d.data()));lbMsg=""}
-  catch(e){lbRows=[];lbMsg=/permission/.test(e&&e.code||"")?"The leaderboard isn’t switched on in the database yet.":"Couldn’t load the leaderboard. Check your connection."}
-  if(tab==="leaderboard")render();
-}
-function lbVal(r,m,per){
-  const today=dkey(new Date()),wk=weekOf(today),mo=monthOf(today),pd=parse(wk);pd.setDate(pd.getDate()-7);const prev=dkey(pd);
-  if(m==="streak")return r.streakWk===wk||r.streakWk===prev?(+r.streak||0):0;
-  const w=per==="week",ok=w?r.wk===wk:r.mo===mo;if(!ok)return 0;
-  return +(w?{days:r.wDays,prs:r.wPRs,vol:r.wVol}[m]:{days:r.mDays,prs:r.mPRs,vol:r.mVol}[m])||0;
-}
-const I_TROPHY='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M9 17h6"/></svg>';
-function viewLeaderboard(){
-  setHead("Leaderboard","Compete with the crew");
-  let h='<div class="seg" role="tablist"><button class="'+(lbPeriod==="week"?"on":"")+'" data-lbp="week">This week</button><button class="'+(lbPeriod==="month"?"on":"")+'" data-lbp="month">This month</button></div>'+
-    '<div class="admtabs lbm">'+LB_METRICS.map(([id,l])=>'<button class="chip'+(lbMetric===id?' on':'')+'" data-lbm="'+id+'">'+l+'</button>').join("")+'</div>';
-  if(isGuest())return h+'<section class="card lbjoin"><span class="lbicon">'+I_TROPHY+'</span><h3>Compete with other lifters</h3><p class="sub">See who trains the most days, keeps the longest streak and hits the most PRs. Sign up free to join the leaderboard.</p><button class="btn wide" data-act="guestsignup">Sign up free</button></section>';
-  lbLoad();
-  if(!lbJoined())h+='<section class="card lbjoin"><span class="lbicon">'+I_TROPHY+'</span><h3>Join the leaderboard</h3><p class="sub">Other Daanav users will see your name as <b>'+esc(lbName())+'</b> and your totals: days trained, streak, PRs and volume. Your workouts and exercises stay private. You can leave any time.</p><button class="btn wide" data-act="lbjoin"'+(lbBusy?" disabled":"")+'>'+(lbBusy?"Joining…":"Join the leaderboard")+'</button></section>';
-  const M=LB_METRICS.find(x=>x[0]===lbMetric);
-  h+='<section class="card"><h3>'+M[1]+(lbMetric==="streak"?' <small class="mute">· weeks in a row</small>':' <small class="mute">· '+(lbPeriod==="week"?"this week":"this month")+'</small>')+'</h3>';
-  if(!lbRows)h+='<p class="sub">Loading…</p>';
-  else{
-    let rows=lbRows.slice();if(lbJoined()){rows=rows.filter(r=>r.id!==user.id);rows.push(Object.assign({id:user.id},lbSummary()))}
-    const tb=r=>{const w=lbPeriod==="week",okp=w?r.wk===weekOf(dkey(new Date())):r.mo===monthOf(dkey(new Date()));return okp?(+(w?r.wWorkouts:r.mWorkouts)||0)*1e9+(+(w?r.wVol:r.mVol)||0):0};
-    rows=rows.map(r=>({r,v:lbVal(r,lbMetric,lbPeriod),t:tb(r)})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v||b.t-a.t||String(a.r.name).localeCompare(String(b.r.name)));
-    if(!rows.length)h+='<p class="sub">Nobody on the board yet. Log a workout and be the first!</p>';
-    else{let rank=0,prevV=null;
-      h+='<ol class="lb">'+rows.slice(0,50).map((x,i)=>{if(x.v!==prevV){rank=i+1;prevV=x.v}const me=user&&x.r.id===user.id;
-        return '<li class="'+(me?"me":"")+(rank<=3?" top r"+rank:"")+'"><span class="rk">'+rank+'</span>'+avHtml(x.r.name,me?myPhoto():x.r.photo,"sm")+'<span class="nm">'+esc(x.r.name||"Lifter")+(me?' <small>You</small>':'')+'</span><b class="num">'+(lbMetric==="vol"?fmt(x.v):x.v)+'<small> '+(lbMetric==="vol"?"kg":lbMetric==="days"?(x.v===1?"day":"days"):lbMetric==="streak"?(x.v===1?"wk":"wks"):"")+'</small></b></li>'}).join("")+'</ol>';
-      if(lbJoined()&&!rows.some(x=>x.r.id===user.id))h+='<p class="sub" style="margin:10px 0 0">You’re not on this board yet. Train '+(lbPeriod==="week"?"this week":"this month")+' to get on it.</p>';
-    }
-    if(lbMsg)h+='<p class="msg">'+esc(lbMsg)+'</p>';
-  }
-  if(lbMetric==="vol")h+='<p class="sub" style="margin:10px 0 0">Volume favours heavy leg days. Days trained and streak are the fairest ways to compete.</p>';
-  h+='</section>';
-  if(lbJoined())h+='<p style="text-align:center;margin:4px 0 0"><button class="link" data-act="lbleave">Leave the leaderboard</button></p>';
-  return h;
-}
-async function lbJoin(){
-  if(!navigator.onLine){toast("You’re offline. Connect to join.",null);return}
-  lbBusy=true;render();
-  S.profile=Object.assign({},S.profile,{lb:true});markState();
-  await lbPublish(true);pushPhoto();lbBusy=false;lbLoaded=false;lbLoad();render();toast("You’re on the leaderboard",null);
-}
-async function lbLeave(){
-  S.profile=Object.assign({},S.profile,{lb:false});markState();lbLast="";
-  try{await timeout(FB.deleteDoc(FB.doc(fdb,"leaderboard",user.id)),10000)}catch(e){}
-  if(lbRows)lbRows=lbRows.filter(r=>r.id!==user.id);render();toast("You left the leaderboard",null);
+/* Leaderboard was removed (Daanav is "you vs you"). Clean up any entry a user published earlier. */
+const lbJoined=()=>false;
+async function lbCleanup(){
+  if(!(S.profile&&S.profile.lb)||!fdb||isGuest())return;
+  try{await timeout(FB.deleteDoc(FB.doc(fdb,"leaderboard",user.id)),10000);const p=Object.assign({},S.profile);delete p.lb;S.profile=p;markState()}catch(e){}
 }
 /* ---------- App config: pricing, offers, coupons, referrals (edited in Admin) ---------- */
 const ADMIN_EMAIL="aggarwalvishal904@gmail.com";
@@ -1230,7 +1278,7 @@ const drawer=document.getElementById("drawer");
 function openDrawer(){if(!user)return;navPush({ov:"drawer"});drawer.querySelector(".dr-panel").innerHTML=drawerHtml();drawer.hidden=false;void drawer.offsetWidth;drawer.classList.add("open");document.body.classList.add("drawer-open");
   setTimeout(()=>{const x=drawer.querySelector(".dr-x");if(x)x.focus({preventScroll:true})},50)}
 function closeDrawer(fromPop){if(fromPop!==true)navPopIf("ov","drawer");drawer.classList.remove("open");document.body.classList.remove("drawer-open");setTimeout(()=>{if(!drawer.classList.contains("open"))drawer.hidden=true},260)}
-function leaveGuest(){try{localStorage.removeItem(GUEST)}catch(e){}user=null;S=blank();tab="workout";authOpen=false;authMode="signin";authMsg="";render();window.scrollTo(0,0)}
+function leaveGuest(){try{localStorage.removeItem(GUEST)}catch(e){}user=null;S=blank();tab="home";authOpen=false;authMode="signin";authMsg="";render();window.scrollTo(0,0)}
 document.getElementById("menuBtn").addEventListener("click",openDrawer);
 document.getElementById("backBtn").addEventListener("click",goBack);
 drawer.addEventListener("click",e=>{

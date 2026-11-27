@@ -107,6 +107,17 @@ async function flush(){
     setSync("synced");
   }catch(e){flushing=false;save();syncErr=errText(e);setSync(navigator.onLine?"error":"offline")}
 }
+/* ---------- Skeletons while data loads ---------- */
+let loadingData=false;
+const skl=(w,h,cls)=>'<span class="sk'+(cls?" "+cls:"")+'" style="width:'+w+';height:'+h+'px"></span>';
+function skFeed(n){let h='';for(let i=0;i<n;i++)h+='<section class="card skc"><div class="skrow">'+skl("36px",36,"r")+'<div style="flex:1">'+skl("40%",14)+skl("25%",11)+'</div></div>'+skl("60%",22)+'<div class="skrow">'+skl("22%",30)+skl("22%",30)+skl("26%",30)+'</div>'+skl("90%",12)+skl("75%",12)+'</section>';return h}
+function skHome(){return '<section class="card skc" aria-busy="true" aria-label="Loading"><div class="skrow">'+skl("90px",70)+'<div style="flex:1">'+skl("70%",16)+skl("55%",16)+'</div></div><div class="skrow sk7">'+Array(7).fill(skl("100%",36)).join("")+'</div>'+skl("70%",12)+'</section>'+
+  '<div class="feedhead">'+skl("120px",18)+'</div>'+skFeed(3)}
+function skProgress(){return '<section class="card skc" aria-busy="true" aria-label="Loading">'+skl("40%",20)+skl("80%",12)+'<div class="skgrid">'+Array(4).fill('<div class="skt">'+skl("52px",52,"r")+skl("70%",13)+skl("85%",10)+'</div>').join("")+'</div></section>'+
+  '<section class="card skc">'+skl("35%",18)+'<div class="skgrid">'+Array(4).fill(skl("100%",70)).join("")+'</div></section>'}
+function skWorkout(){return '<section class="card skc" aria-busy="true" aria-label="Loading">'+skl("40%",18)+'<div class="skrow">'+skl("30%",40)+skl("30%",40)+skl("30%",40)+'</div></section><section class="card skc">'+skl("50%",22)+'<div class="skgrid">'+Array(8).fill(skl("100%",64)).join("")+'</div></section>'}
+function skRows(n){let h='';for(let i=0;i<n;i++)h+='<div class="skrow" style="padding:8px 0">'+skl("36px",36,"r")+'<div style="flex:1">'+skl("50%",13)+skl("70%",10)+'</div>'+skl("60px",13)+'</div>';return h}
+const syncedKey=()=>"daanav-synced:"+(user?user.id:"");
 async function pull(){
   if(!fdb||!user||isGuest()||!navigator.onLine)return;
   try{
@@ -120,10 +131,10 @@ async function pull(){
         if(JSON.stringify(act)!==JSON.stringify(S.active||null)){S.active=act;draft={w:"",r:""}}}
       else if(S.active||Object.keys(S.custom).length)markState();
     }
-    save();
+    save();try{localStorage.setItem(syncedKey(),"1")}catch(x){}
     if(!hasPending())setSync("synced");
-    render();
-  }catch(e){syncErr=errText(e);setSync(navigator.onLine?"error":"offline")}
+    loadingData=false;render();
+  }catch(e){syncErr=errText(e);setSync(navigator.onLine?"error":"offline");if(loadingData){loadingData=false;render()}}
 }
 function errText(e){
   const c=e&&e.code||"";
@@ -743,7 +754,7 @@ document.getElementById("toastUndo").addEventListener("click",()=>{document.getE
 /* ---------- Sign-in screens ---------- */
 const G_ICON='<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>';
 function viewAuth(){
-  if(!ready&&!bootError){setHead("Your gym log","Loading…");return '<section class="card empty"><p>Loading your workouts…</p></section>'}
+  if(!ready&&!bootError){setHead("","Loading…");return skHome()}
   if(bootError){setHead("Your gym log","Setup needed");return '<section class="card"><h2>Almost there</h2><p class="sub">'+esc(bootError)+'</p></section>'}
   const M={
     signin:["Welcome back","Sign in to see your workouts on any device.","Sign in"],
@@ -833,7 +844,9 @@ function render(){
   if(tab==="admin"&&!isAdmin())tab="account";
   if(tab==="invite"&&(isGuest()||!(CONF.referral.enabled||isAdmin())))tab="account";
   if(tab==="plans"&&!(CONF.pricing.enabled||isAdmin()))tab="account";
+  app.removeAttribute("aria-busy");
   if(!TABS.includes(tab))tab="home";
+  if(loadingData&&!isGuest()&&["home","progress","workout"].includes(tab)){setHead(tab==="home"?"Home":tab==="progress"?"Progress":"Workout","Loading your data…");app.innerHTML=tab==="home"?skHome():tab==="progress"?skProgress():skWorkout();syncUrl();document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));return}
   const v=tab==="home"?viewHome():tab==="workout"?viewWorkout():tab==="progress"?viewProgress():tab==="admin"?viewAdmin():tab==="plans"?viewPlans():tab==="invite"?viewInvite():viewAccount();
   const ann=CONF.general.announcement&&tab!=="admin"?'<section class="card announce" role="status">'+esc(CONF.general.announcement)+'</section>':'';
   app.innerHTML=ann+(isGuest()&&!["account","plans"].includes(tab)?guestBanner(tab!=="home"):'')+v;
@@ -1143,7 +1156,7 @@ function photoSlot(wid,mode){
   const cam='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="4"/></svg>';
   if(ph)return '<figure class="wph"><img src="'+esc(ph)+'" alt="Post-workout photo"></figure>'+
     (mode==="feed-ro"?'':'<div class="wph-a"><label class="link"><input type="file" accept="image/*,.heic,.heif" data-phin="'+wid+'">Change photo</label><button class="link" type="button" data-phrm="'+wid+'">Remove</button></div>');
-  if(w&&w.photo&&phLoading[w.id]!=="none")return '<figure class="wph loading"><span>Loading photo…</span></figure>';
+  if(w&&w.photo&&phLoading[w.id]!=="none")return '<figure class="wph loading sk" aria-label="Loading photo"></figure>';
   if(w&&w.photo&&mode==="feed-ro")return '<p class="sub wph-miss">Photo is on another device and hasn’t synced yet.</p>';
   if(mode==="feed-ro")return"";
   return '<label class="wph-add'+(mode==="cele"?" big":"")+'"><input type="file" accept="image/*,.heic,.heif" data-phin="'+wid+'">'+cam+'<span><b>Add your post-workout photo</b><small>'+(mode==="cele"?"It goes on your story and your Home feed":"Show off the pump")+'</small></span></label>';
@@ -1449,6 +1462,7 @@ function handleSession(u){
   authOpen=false;
   saveLast();
   loadCache();mergeGuest();
+  try{loadingData=!localStorage.getItem(syncedKey())&&!S.workouts.length&&navigator.onLine}catch(x){loadingData=false}
   if(pendingGender&&!gender()){S.profile=Object.assign({},S.profile,{gender:pendingGender});markState()}pendingGender="";
   authMsg="";render();
   syncNow();
@@ -1662,7 +1676,7 @@ function viewAdmin(){
       '<div class="row2"><div>'+fnum("maxUses","","Max uses (blank = no limit)",'min="1" step="1"')+'</div><div><label class="fl">Expires on (optional)</label><input type="date" name="expiresOn"></div></div>'+
       '<label class="fl">Note (only you see this)</label><input type="text" name="note" maxlength="60" placeholder="e.g. For my gym batch">'+saveBtn("Create coupon")+amsg("coupons")+'</form></section>';
     h+='<section class="card"><h3>Coupons'+(admCoupons?' <small class="mute">('+admCoupons.length+')</small>':'')+'</h3>';
-    if(!admCoupons)h+='<p class="sub">Loading…</p>';
+    if(!admCoupons)h+=skRows(3);
     else if(!admCoupons.length)h+='<p class="sub">No coupons yet.</p>';
     else h+='<div class="clist">'+admCoupons.map(c=>{const exp=c.expiresOn&&c.expiresOn<dkey(new Date());
       return '<div class="crow'+(c.active&&!exp?'':' off')+'"><div><b class="num">'+esc(c.id)+'</b><small>'+(c.type==="flat"?money(c.value)+" off":c.value+"% off")+' · used '+(c.used||0)+(c.maxUses?'/'+c.maxUses:'')+(c.expiresOn?' · '+(exp?'expired ':'until ')+short(c.expiresOn):'')+(c.note?' · '+esc(c.note):'')+'</small></div>'+
@@ -1677,10 +1691,10 @@ function viewAdmin(){
       const top=Object.entries(by).sort((a,b)=>b[1]-a[1]),name=c=>{const u=admUsers.find(x=>x.refCode===c);return u?(u.name||u.email):"Unknown"};
       h+='<section class="card"><h3>Referral stats</h3><div class="tiles">'+tile("Referred sign-ups",Object.values(by).reduce((a,b)=>a+b,0))+tile("Active referrers",top.length)+'</div>'+
         (top.length?'<table class="stack" style="margin-top:10px"><thead><tr><th>Referrer</th><th class="r">Code</th><th class="r">Sign-ups</th></tr></thead><tbody>'+top.slice(0,20).map(([c,n])=>'<tr><td>'+esc(name(c))+'</td><td class="r num" data-l="Code">'+esc(c)+'</td><td class="r num" data-l="Sign-ups">'+n+'</td></tr>').join("")+'</tbody></table>':'<p class="sub" style="margin-top:10px">No referred sign-ups yet.</p>')+amsg("users")+'</section>'}
-    else h+='<section class="card"><p class="sub">Loading stats…</p></section>';
+    else h+='<section class="card skc">'+skRows(3)+'</section>';
   }else if(admSub==="users"){
     admLoad("users");
-    if(!admUsers)h+='<section class="card"><p class="sub">Loading users…</p>'+amsg("users")+'</section>';
+    if(!admUsers)h+='<section class="card skc">'+skRows(5)+amsg("users")+'</section>';
     else{const now=Date.now(),D=864e5,ms=v=>!v?0:typeof v==="string"?Date.parse(v)||0:v.toMillis?v.toMillis():v.seconds?v.seconds*1000:+v||0;
       const seen=u=>ms(u.lastSeen),cnt=t=>admUsers.filter(u=>seen(u)>now-t).length;
       const q=admQ.toLowerCase(),list=admUsers.filter(u=>!q||(u.name||"").toLowerCase().includes(q)||(u.email||"").toLowerCase().includes(q))

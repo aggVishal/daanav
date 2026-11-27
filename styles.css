@@ -776,3 +776,16 @@ nav .fab-c{position:relative}
 .done-x{flex:none;width:40px;height:40px}
 .toast{bottom:calc(178px + var(--safeB))}.savenote{text-align:center;margin:0 0 8px;font-size:13px}
 .fin-sum{margin:4px 0 8px;color:var(--mute)}.fin-sum b{color:var(--ink)}.fin-note{margin:6px 0 0;font-size:13px}
+
+/* ---------- Loading skeletons ---------- */
+.sk{display:block;border-radius:8px;margin:6px 0;background:linear-gradient(90deg,var(--soft) 25%,color-mix(in srgb,var(--line) 70%,var(--soft)) 37%,var(--soft) 63%);background-size:400% 100%;animation:skp 1.3s ease-in-out infinite}
+.sk.r{border-radius:50%;margin:0}
+@keyframes skp{0%{background-position:100% 50%}100%{background-position:0 50%}}
+@media(prefers-reduced-motion:reduce){.sk{animation:none}}
+.skc{pointer-events:none}
+.skrow{display:flex;align-items:center;gap:10px}
+.skrow.sk7 .sk{flex:1;margin:14px 0 8px}
+.skgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:10px}
+.skt{display:grid;justify-items:center;padding:12px;border-radius:16px;background:var(--soft)}
+.skt .sk{margin:4px auto}
+.wph.loading.sk{aspect-ratio:4/5;max-height:300px;margin:0;border-radius:18px}

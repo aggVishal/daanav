@@ -849,7 +849,9 @@ function render(){
   if(loadingData&&!isGuest()&&["home","progress","workout"].includes(tab)){setHead(tab==="home"?"Home":tab==="progress"?"Progress":"Workout","Loading your data…");app.innerHTML=tab==="home"?skHome():tab==="progress"?skProgress():skWorkout();syncUrl();document.querySelectorAll("nav button").forEach(b=>b.classList.toggle("on",b.dataset.tab===tab));return}
   const v=tab==="home"?viewHome():tab==="workout"?viewWorkout():tab==="progress"?viewProgress():tab==="admin"?viewAdmin():tab==="plans"?viewPlans():tab==="invite"?viewInvite():viewAccount();
   const ann=CONF.general.announcement&&tab!=="admin"?'<section class="card announce" role="status">'+esc(CONF.general.announcement)+'</section>':'';
+  const oldFig=app.querySelector(".fig2"),oldKey=oldFig&&oldFig.getAttribute("aria-label");
   app.innerHTML=ann+(isGuest()&&!["account","plans"].includes(tab)?guestBanner(tab!=="home"):'')+v;
+  {const nf=app.querySelector(".fig2");if(oldFig&&nf&&nf.getAttribute("aria-label")===oldKey)nf.replaceWith(oldFig)} // keep the exercise animation running
   fitText(app);syncUrl();document.body.classList.toggle("lifting",!!S.active);
   document.querySelectorAll("nav button").forEach(b=>{b.classList.toggle("on",b.dataset.tab===tab);b.setAttribute("aria-current",b.dataset.tab===tab?"page":"false")});
   ro.disconnect();const f=document.getElementById("fig");if(f){ro.observe(f);drawChart()}
@@ -1355,7 +1357,8 @@ app.addEventListener("click",e=>{
   if(d.pick){pickPart=d.pick;render();return}
   if(d.addpart){A.parts.push(d.addpart);pickPart=d.addpart;showAllParts=false;markState();render();return}
   if(d.ex){openEx(d.ex,d.part);return}
-  if(d.step){const k=d.step,v=parseFloat(String(draft[k]).replace(",","."))||0,n=Math.max(0,Math.round((v+parseFloat(d.d))*100)/100);draft[k]=k==="r"?String(Math.round(n)):kg(n);render();return}
+  if(d.step){const k=d.step,v=parseFloat(String(draft[k]).replace(",","."))||0,n=Math.max(0,Math.round((v+parseFloat(d.d))*100)/100);draft[k]=k==="r"?String(Math.round(n)):kg(n);
+    const inp=document.getElementById("in-"+k);if(inp){inp.value=draft[k];fitText(inp.closest(".step")||app)}else render();return}
   if(d.rmex){const i=A.ex.findIndex(e=>e.name===d.rmex);if(i<0)return;const [gone]=A.ex.splice(i,1);markState();render();
     toast(gone.name+" removed",()=>{if(S.active&&!S.active.ex.some(e=>e.name===gone.name)){S.active.ex.splice(Math.min(i,S.active.ex.length),0,gone);markState();render()}});return}
   if(d.delset!=null){A.ex[A.cur].sets.splice(+d.delset,1);editSet=null;markState();render();return}

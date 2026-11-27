@@ -1,6 +1,87 @@
 /* Exercise photos and step-by-step instructions.
    Source: free-exercise-db by yuhonas (github.com/yuhonas/free-exercise-db), released into the public domain under the Unlicense. */
 window.EXDATA={
+"Dumbbell shrug": {
+"img": [
+"img/ex/dumbbell-shrug-0.webp",
+"img/ex/dumbbell-shrug-1.webp"
+],
+"steps": [
+"Stand erect with a dumbbell on each hand (palms facing your torso), arms extended on the sides.",
+"Lift the dumbbells by elevating the shoulders as high as possible while you exhale. Hold the contraction at the top for a second. Tip: The arms should remain extended at all times. Refrain from using the biceps to help lift the dumbbells. Only the shoulders should be moving up and down.",
+"Lower the dumbbells back to the original position.",
+"Repeat for the recommended amount of repetitions."
+],
+"src": "Dumbbell_Shrug"
+},
+"Cable shrug": {
+"img": [
+"img/ex/cable-shrug-0.webp",
+"img/ex/cable-shrug-1.webp"
+],
+"steps": [
+"Grasp a cable bar attachment that is attached to a low pulley with a shoulder width or slightly wider overhand (palms facing down) grip.",
+"Stand erect close to the pulley with your arms extended in front of you holding the bar. This will be your starting position.",
+"Lift the bar by elevating the shoulders as high as possible as you exhale. Hold the contraction at the top for a second. Tip: The arms should remain extended at all times. Refrain from using the biceps to help lift the bar. Only the shoulders should be moving up and down.",
+"Lower the bar back to the original position.",
+"Repeat for the recommended amount of repetitions."
+],
+"src": "Cable_Shrugs"
+},
+"Upright row": {
+"img": [
+"img/ex/upright-row-0.webp",
+"img/ex/upright-row-1.webp"
+],
+"steps": [
+"Grasp a barbell with an overhand grip that is slightly less than shoulder width. The bar should be resting on the top of your thighs with your arms extended and a slight bend in your elbows. Your back should also be straight. This will be your starting position.",
+"Now exhale and use the sides of your shoulders to lift the bar, raising your elbows up and to the side. Keep the bar close to your body as you raise it. Continue to lift the bar until it nearly touches your chin. Tip: Your elbows should drive the motion, and should always be higher than your forearms. Remember to keep your torso stationary and pause for a second at the top of the movement.",
+"Lower the bar back down slowly to the starting position. Inhale as you perform this portion of the movement.",
+"Repeat for the recommended amount of repetitions."
+],
+"src": "Upright_Barbell_Row"
+},
+"Cable upright row": {
+"img": [
+"img/ex/cable-upright-row-0.webp",
+"img/ex/cable-upright-row-1.webp"
+],
+"steps": [
+"Grasp a straight bar cable attachment that is attached to a low pulley with a pronated (palms facing your thighs) grip that is slightly less than shoulder width. The bar should be resting on top of your thighs. Your arms should be extended with a slight bend at the elbows and your back should be straight. This will be your starting position.",
+"Use your side shoulders to lift the cable bar as you exhale. The bar should be close to the body as you move it up. Continue to lift it until it nearly touches your chin. Tip: Your elbows should drive the motion. As you lift the bar, your elbows should always be higher than your forearms. Also, keep your torso stationary and pause for a second at the top of the movement.",
+"Lower the bar back down slowly to the starting position. Inhale as you perform this portion of the movement.",
+"Repeat for the recommended amount of repetitions."
+],
+"src": "Upright_Cable_Row"
+},
+"Cable rear delt fly": {
+"img": [
+"img/ex/cable-rear-delt-fly-0.webp",
+"img/ex/cable-rear-delt-fly-1.webp"
+],
+"steps": [
+"Adjust the pulleys to the appropriate height and adjust the weight. The pulleys should be above your head.",
+"Grab the left pulley with your right hand and the right pulley with your left hand, crossing them in front of you. This will be your starting position.",
+"Initiate the movement by moving your arms back and outward, keeping your arms straight as you execute the movement.",
+"Pause at the end of the motion before returning the handles to the start position."
+],
+"src": "Cable_Rear_Delt_Fly"
+},
+"Cable rear delt row": {
+"img": [
+"img/ex/cable-rear-delt-row-0.webp",
+"img/ex/cable-rear-delt-row-1.webp"
+],
+"steps": [
+"Sit in the same position on a low pulley row station as you would if you were doing seated cable rows for the back.",
+"Attach a rope to the pulley and grasp it with an overhand grip. Your arms should be extended and parallel to the floor with the elbows flared out.",
+"Keep your lower back upright and slide your hips back so that your knees are slightly bent. This will be your starting position.",
+"Pull the cable attachment towards your upper chest, just below the neck, as you keep your elbows up and out to the sides. Continue this motion as you exhale until the elbows travel slightly behind the back. Tip: Keep your upper arms horizontal, perpendicular to the torso and parallel to the floor throughout the motion.",
+"Go back to the initial position where the arms are extended and the shoulders are stretched forward. Inhale as you perform this portion of the movement.",
+"Repeat for the recommended amount of repetitions."
+],
+"src": "Cable_Rope_Rear-Delt_Rows"
+},
 "Dumbbell pullover": {
 "img": [
 "img/ex/dumbbell-pullover-0.webp",

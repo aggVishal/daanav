@@ -8,7 +8,7 @@ function enterGuest(keepTab){try{localStorage.setItem(GUEST,"1")}catch(e){}user=
 const LIB={
   Chest:["Bench press","Incline bench press","Dumbbell bench press","Incline dumbbell press","Machine chest press","Chest fly (machine)","Cable crossover","Dumbbell pullover","Push-ups","Dips"],
   Back:["Deadlift","Pull-ups","Lat pulldown","Barbell row","Seated cable row","Dumbbell row","T-bar row","Face pull"],
-  Shoulders:["Overhead press","Dumbbell shoulder press","Arnold press","Lateral raise","Front raise","Rear delt fly","Shrugs"],
+  Shoulders:["Overhead press","Dumbbell shoulder press","Arnold press","Lateral raise","Front raise","Rear delt fly","Cable rear delt fly","Cable rear delt row","Face pull","Shrugs","Dumbbell shrug","Cable shrug","Upright row","Cable upright row","Farmer's walk"],
   Legs:["Squat","Leg press","Romanian deadlift","Walking lunges","Bulgarian split squat","Leg extension","Leg curl","Hip thrust","Calf raise"],
   Biceps:["Barbell curl","Dumbbell curl","Hammer curl","Preacher curl","Cable curl","Incline dumbbell curl"],
   Triceps:["Tricep pushdown","Overhead tricep extension","Skull crushers","Close-grip bench press","Tricep dips"],
@@ -842,21 +842,24 @@ function render(){
 /* ---------- Back button / swipe-back: every screen and pop-up gets a history entry ---------- */
 const NAV=window.history;let skipPop=0;
 const navState=()=>NAV.state||{};
-function navPush(extra){try{NAV.pushState(Object.assign({tab},extra||{}),"")}catch(e){}}
-function navReplace(st){try{NAV.replaceState(st,"")}catch(e){}}
+function navPush(extra){try{NAV.pushState(Object.assign({tab,d:(navState().d||1)+1},extra||{}),"")}catch(e){}}
+function navReplace(st){try{NAV.replaceState(Object.assign({d:navState().d||1},st),"")}catch(e){}}
 function navPopIf(key,val){if(navState()[key]===val){skipPop++;NAV.back()}}
 /* Keep the current screen in the address (#progress, #admin/users …) so a refresh reopens it. */
 const TABS=["home","workout","progress","account","plans","invite","admin"];
 let bootAdmSub="";
 {const h0=decodeURIComponent(location.hash.slice(1)).split("/");if(h0[0]==="history"||h0[0]==="leaderboard")h0[0]="home";if(TABS.includes(h0[0])){tab=h0[0];bootAdmSub=h0[1]||""}}
-try{NAV.replaceState({tab,root:1},"")}catch(e){}
+/* History is kept flat: [guard] → [Home] → [one page] (+ pop-ups on top).
+   Back from any page lands on Home; back on Home stays on Home. */
+try{const t0=tab,h0=location.hash,base=location.pathname+location.search;NAV.replaceState({guard:1,d:0},"",base);NAV.pushState({tab:"home",root:1,d:1},"",base);if(t0!=="home")NAV.pushState({tab:t0,d:2},"",base+h0)}catch(e){}
+function goRootHome(){const d=navState().d||1;if(d>1){skipPop++;try{NAV.go(1-d)}catch(e){skipPop--}}if(tab!=="home")go("home",true);else render()}
 function syncUrl(){
   let sub="";if(tab==="admin")try{sub="/"+admSub}catch(e){}
   const want=tab==="home"?"":"#"+tab+sub;
   if(location.hash!==want)try{NAV.replaceState(NAV.state,"",want||location.pathname+location.search)}catch(e){}
 }
 addEventListener("popstate",e=>{
-  if(skipPop){skipPop--;return}
+  if(skipPop){skipPop--;syncUrl();return}
   const st=e.state||{},sh=document.getElementById("share"),z=document.getElementById("zoom"),ce=document.getElementById("cele");
   if(!sh.hidden){sh.hidden=true;return}
   if(!document.getElementById("dpick").hidden){closeDatePicker(true);return}
@@ -867,11 +870,18 @@ addEventListener("popstate",e=>{
   if(isGuest()&&authOpen){authOpen=false;authMsg="";render();return}
   const A=S.active;
   if(A&&A.cur!=null&&tab==="workout"&&!st.ex){cleanActive();markState();render();window.scrollTo(0,0);return}
-  const t=st.tab||"home";
-  if(t!==tab)go(t,true);else render();
+  if(st.guard){try{NAV.pushState({tab:"home",root:1,d:1},"")}catch(x){}if(tab!=="home")go("home",true);else render();return}
+  if(st.root){if(tab!=="home")go("home",true);else render();return}
+  // landed on a page entry from something deeper: always continue to Home
+  const d=st.d||2;skipPop++;try{NAV.go(1-d)}catch(x){skipPop--}
+  if(tab!=="home")go("home",true);else render();
 });
-function goBack(){const s=navState();if(!s.root&&s.tab===tab)NAV.back();else go("home")}
-function go(t,noPush){if(!noPush&&t!==tab)try{NAV.pushState({tab:t},"")}catch(e){}tab=t;render();window.scrollTo(0,0);app.classList.remove("enter");void app.offsetWidth;app.classList.add("enter");clearTimeout(go.t);go.t=setTimeout(()=>app.classList.remove("enter"),700)}
+function goBack(){goRootHome()}
+function go(t,noPush){
+  if(!noPush&&t!==tab){
+    if(t==="home"){const d=navState().d||1;if(d>1){skipPop++;try{NAV.go(1-d)}catch(e){skipPop--}}}
+    else{const s0=navState();try{if(s0.root||s0.guard)NAV.pushState({tab:t,d:2},"");else NAV.replaceState({tab:t,d:s0.d||2},"")}catch(e){}}
+  }tab=t;render();window.scrollTo(0,0);app.classList.remove("enter");void app.offsetWidth;app.classList.add("enter");clearTimeout(go.t);go.t=setTimeout(()=>app.classList.remove("enter"),700)}
 const liveMins=A=>A.manual?A.mins:Math.max(1,Math.round((Date.now()-A.start)/60000));
 function startWorkout(p){
   const today=dkey(new Date()),past=logDate&&logDate<today?logDate:null;
@@ -1043,7 +1053,7 @@ function showCele(){
   try{if(navigator.vibrate)navigator.vibrate([30,40,60])}catch(e){}
   setTimeout(()=>{const b=el.querySelector('[data-cele="done"]');if(b)b.focus({preventScroll:true})},1600);
 }
-function closeCele(fromPop){if(fromPop!==true)navReplace({tab:"home"});const el=document.getElementById("cele");el.hidden=true;el.innerHTML="";document.body.classList.remove("celebrating");cancelAnimationFrame(celeRaf);openId=null;go(fromPop===true?(navState().tab||"home"):"home",true);window.scrollTo(0,0)}
+function closeCele(fromPop){const el=document.getElementById("cele");el.hidden=true;el.innerHTML="";document.body.classList.remove("celebrating");cancelAnimationFrame(celeRaf);openId=null;goRootHome();window.scrollTo(0,0)}
 document.getElementById("cele").addEventListener("click",e=>{const b=e.target.closest("[data-cele]");if(!b)return;if(b.dataset.cele==="done")closeCele();else if(b.dataset.cele==="share")openShare(workoutSpec(celeData));else{celeRun++;showCele()}});
 
 /* ---------- Share workout as an Instagram / WhatsApp story image ---------- */
@@ -1277,7 +1287,7 @@ function finish(){
     const w={id:A.edit,date:A.date,start:A.start,end:A.start+(A.mins||60)*60000,parts:A.parts.filter(p=>A.ex.some(e=>e.part===p)),ex:A.ex,photo:!!(old&&old.photo)};
     if(!w.parts.length)w.parts=A.parts;
     S.workouts=S.workouts.filter(x=>x.id!==A.edit).concat([w]);S.active=null;editSet=null;markUp(w.id);markState();
-    openId=w.id;navReplace({tab:"home"});go("home",true);window.scrollTo(0,0);toast("Workout updated",null);return;
+    openId=w.id;goRootHome();window.scrollTo(0,0);toast("Workout updated",null);return;
   }
   if(!A.ex.length){S.active=null;markState();render();return}
   if(!A.past&&!A.manual&&!finishConfirmed){const el=Math.round((Date.now()-A.start)/60000),n=A.ex.reduce((a,e)=>a+e.sets.length,0);
@@ -1338,7 +1348,7 @@ app.addEventListener("click",e=>{
     case"backex":cleanActive();markState();render();navPopIf("ex",1);break;
     case"finish":finish();break;
     case"toggleParts":showAllParts=!showAllParts;render();break;
-    case"discard":{const prev=S.active;if(prev&&prev.edit){S.active=null;editSet=null;markState();navReplace({tab:"home"});go("home",true);toast("No changes saved",null);break}S.active=null;pickPart=null;markState();render();window.scrollTo(0,0);
+    case"discard":{const prev=S.active;if(prev&&prev.edit){S.active=null;editSet=null;markState();goRootHome();toast("No changes saved",null);break}S.active=null;pickPart=null;markState();render();window.scrollTo(0,0);
       toast("Workout discarded",()=>{if(!S.active){S.active=prev;markState();render()}});break}
     case"syncnow":setSync("saving");syncNow();break;
     case"signout":signOut();break;

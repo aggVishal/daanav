@@ -525,3 +525,6 @@ textarea{padding:12px 14px;resize:vertical;font:inherit;font-size:16px;margin-bo
 .cele .streak b{font:var(--dw) 17px/1 var(--display);color:var(--accent)}
 [data-theme=chalk] .cele .streak span{background:#0B0B0B;color:#fff}
 [data-theme=chalk] .cele .streak b{color:#D4FF3A}
+.cal .on i{display:grid;place-items:center;width:62%;height:62%}
+.cal .on i svg{width:100%;height:100%}
+.cele .dots i svg{width:18px;height:18px}

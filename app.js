@@ -244,6 +244,11 @@ function prsIn(key){
   return hit.size;
 }
 /* ---------- Consistency: calendar + week streak ---------- */
+/* Activity icons. Every workout is "gym" today; yoga, running etc. can add their own icon here. */
+const ACT_ICON={gym:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg>'};
+const actOf=w=>(w&&w.type)||"gym";
+const actIcon=t=>ACT_ICON[t]||ACT_ICON.gym;
+const dayAct=k=>{const w=S.workouts.find(x=>x.date===k);return actOf(w)};
 const trainedDays=()=>new Set(S.workouts.map(w=>w.date));
 function weekStreak(){
   const wk=new Set(S.workouts.map(w=>weekOf(w.date))),d=parse(weekOf(dkey(new Date())));
@@ -262,7 +267,7 @@ function calHtml(ym,small){
   let h='<div class="cal'+(small?' sm':'')+'" role="grid" aria-label="'+esc(monthName(ym))+'">'+["M","T","W","T","F","S","S"].map(l=>'<b aria-hidden="true">'+l+'</b>').join("");
   for(let i=0;i<lead;i++)h+='<span class="pad"></span>';
   for(let d=1;d<=n;d++){const k=ym+"-"+pad(d),on=t.has(k),tag=on&&!small?"button":"span";
-    h+='<'+tag+(on&&!small?' data-calday="'+k+'"':'')+' class="'+[on?"on":"",k===today?"today":"",k>today?"fut":""].join(" ").trim()+'" aria-label="'+esc(short(k))+(on?', trained':'')+'">'+(on?'<i aria-hidden="true">✓</i>':'<em>'+d+'</em>')+'</'+tag+'>'}
+    h+='<'+tag+(on&&!small?' data-calday="'+k+'"':'')+' class="'+[on?"on":"",k===today?"today":"",k>today?"fut":""].join(" ").trim()+'" aria-label="'+esc(short(k))+(on?', workout':'')+'">'+(on?'<i>'+actIcon(dayAct(k))+'</i>':'<em>'+d+'</em>')+'</'+tag+'>'}
   return h+'</div>';
 }
 let calYm=null;
@@ -274,7 +279,7 @@ function consistencyCard(){
     tile("Days trained",md,'<em>'+(calYm===cur?"this month":"in "+monthName(calYm,{month:"short"}))+'</em>')+
     tile("Best streak",bestWeekStreak(),'<em>weeks</em>')+'</div>'+
     '<div class="calnav"><button data-calm="-1" aria-label="Previous month"'+(calYm<=first?" disabled":"")+'>‹</button><b>'+esc(monthName(calYm))+'</b><button data-calm="1" aria-label="Next month"'+(calYm>=cur?" disabled":"")+'>›</button></div>'+
-    calHtml(calYm)+'<p class="sub" style="margin:10px 0 0">A week counts toward your streak if you train at least once in it. Tap a ticked day to open that workout.</p></section>';
+    calHtml(calYm)+'<p class="sub" style="margin:10px 0 0">A week counts toward your streak if you train at least once in it. Tap a marked day to open that workout.</p></section>';
 }
 /* Getting stronger: best estimated 1RM (or reps, for bodyweight) this period vs everything before it. */
 function strongerCard(cur,c){
@@ -674,7 +679,7 @@ function showCele(){
     const c=["#0B0B0B","#FFFFFF","#0B0B0B","#55534C"];
     for(let i=0;i<30;i++)fx+='<span class="conf" style="left:'+((i*41)%100)+'%;background:'+c[i%4]+';animation-delay:'+(.5+((i*29)%80)/100)+'s;border-radius:'+(i%3?"2px":"50%")+'"></span>';
   }
-  const dots='<div class="dots">'+["M","T","W","T","F","S","S"].map((l,i)=>'<i class="'+(d.days[i]?"on":"")+'" style="animation-delay:'+(1.5+i*.08)+'s">'+(d.days[i]?"✓":l)+'</i>').join("")+'</div>';
+  const dots='<div class="dots">'+["M","T","W","T","F","S","S"].map((l,i)=>'<i class="'+(d.days[i]?"on":"")+'" style="animation-delay:'+(1.5+i*.08)+'s">'+(d.days[i]?actIcon("gym"):l)+'</i>').join("")+'</div>';
   el.innerHTML='<div class="fx" aria-hidden="true">'+fx+'</div><div class="wrap"><div class="hero" aria-hidden="true">'+hero+'</div>'+
     '<div class="kick">'+esc(H.kick)+'</div><h2 id="celeTitle">'+H.h+'</h2><p class="say up1 d1">'+esc(msg)+'</p>'+
     '<div class="stats"><div class="stat up1 d2"><span>Total lifted</span><b><span data-to="'+d.vol+'">0</span><small> kg</small></b></div>'+
@@ -745,7 +750,8 @@ async function drawStory(d){
   ["M","T","W","T","F","S","S"].forEach((l,i)=>c.fillText(l,gx+i*pitch+cs/2,cy+56));
   for(let dd=1;dd<=nd;dd++){const ix=(lead+dd-1)%7,iy=Math.floor((lead+dd-1)/7),cx=gx+ix*pitch,cyy=gy+iy*pitch,isOn=on.has(dd),isDay=dd===+d.date.slice(8);
     if(isOn){c.fillStyle=t==="chalk"?"#0B0B0B":P.acc;rrect(c,cx,cyy,cs,cs,12);c.fill();
-      c.strokeStyle=t==="chalk"?"#D4FF3A":P.accInk;c.lineWidth=5;c.lineCap="round";c.lineJoin="round";c.beginPath();c.moveTo(cx+12,cyy+23);c.lineTo(cx+19,cyy+30);c.lineTo(cx+33,cyy+14);c.stroke()}
+      c.strokeStyle=t==="chalk"?"#D4FF3A":P.accInk;c.lineWidth=4;c.lineCap="round";c.beginPath();
+      [[13,14,13,30],[31,14,31,30],[8,18,8,26],[36,18,36,26],[13,22,31,22]].forEach(q=>{c.moveTo(cx+q[0],cyy+q[1]);c.lineTo(cx+q[2],cyy+q[3])});c.stroke()}
     else{c.strokeStyle=P.line;c.lineWidth=2;rrect(c,cx+1,cyy+1,cs-2,cs-2,12);c.stroke();c.fillStyle=P.mute;c.font="600 "+BODY.replace("{s}",20);c.fillText(String(dd),cx+cs/2,cyy+29)}
     if(isDay){c.strokeStyle=P.hot;c.lineWidth=4;rrect(c,cx-5,cyy-5,cs+10,cs+10,15);c.stroke()}}
   c.textAlign="left";

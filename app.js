@@ -557,21 +557,29 @@ function avHtml(name,photo,cls){
   const ph=safePhoto(photo),ini=esc(((String(name||"").trim()[0])||"?").toUpperCase());
   return '<span class="av'+(cls?" "+cls:"")+(ph?" pic":"")+'" aria-hidden="true">'+(ph?'<img src="'+esc(ph)+'" alt="" referrerpolicy="no-referrer" onerror="this.remove()">':'')+'<i>'+ini+'</i></span>';
 }
+/* Load any picked photo as an <img>. iPhone HEIC photos open natively in Safari; other browsers
+   (Chrome, Edge, Firefox on laptops) can't, so we convert them with heic2any, loaded only when needed. */
+const isHeic=f=>/hei[cf]/i.test(f.type||"")||/\.(heic|heif)$/i.test(f.name||"");
+const isImageFile=f=>!!f&&(/^image\//.test(f.type||"")||isHeic(f)||/\.(jpe?g|png|webp|gif|avif)$/i.test(f.name||""));
+let heicLib=null;
+function loadHeicLib(){if(!heicLib)heicLib=new Promise((res,rej)=>{if(window.heic2any){res(window.heic2any);return}const sc=document.createElement("script");sc.src="vendor/heic2any.min.js";sc.onload=()=>window.heic2any?res(window.heic2any):rej(new Error("heic"));sc.onerror=()=>{heicLib=null;rej(new Error("heic"))};document.head.appendChild(sc)});return heicLib}
+function imgFromBlob(b){return new Promise((res,rej)=>{const url=URL.createObjectURL(b),img=new Image();img.onload=()=>{res(img);setTimeout(()=>URL.revokeObjectURL(url),1000)};img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error("decode"))};img.src=url})}
+async function loadImageFile(file){
+  if(!isImageFile(file))throw new Error("type");
+  try{return await imgFromBlob(file)}catch(e){if(!isHeic(file))throw e}
+  toast("Converting your iPhone photo…",null);
+  const conv=await loadHeicLib(),out=await conv({blob:file,toType:"image/jpeg",quality:.9});
+  return imgFromBlob(Array.isArray(out)?out[0]:out);
+}
 function photoToDataUrl(file,size){
-  return new Promise((res,rej)=>{
-    if(!file||!/^image\//.test(file.type)){rej(new Error("type"));return}
-    const url=URL.createObjectURL(file),img=new Image();
-    img.onload=()=>{const s=Math.min(img.naturalWidth,img.naturalHeight);if(!s){URL.revokeObjectURL(url);rej(new Error("size"));return}
-      const cv=document.createElement("canvas");cv.width=cv.height=size;const c=cv.getContext("2d");
-      c.imageSmoothingQuality="high";c.drawImage(img,(img.naturalWidth-s)/2,(img.naturalHeight-s)/2,s,s,0,0,size,size);
-      URL.revokeObjectURL(url);res(cv.toDataURL("image/jpeg",0.82))};
-    img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error("decode"))};
-    img.src=url;
-  });
+  return loadImageFile(file).then(img=>{const s=Math.min(img.naturalWidth,img.naturalHeight);if(!s)throw new Error("size");
+    const cv=document.createElement("canvas");cv.width=cv.height=size;const c=cv.getContext("2d");
+    c.imageSmoothingQuality="high";c.drawImage(img,(img.naturalWidth-s)/2,(img.naturalHeight-s)/2,s,s,0,0,size,size);
+    return cv.toDataURL("image/jpeg",0.82)});
 }
 async function setPhoto(file){
   try{const d=await photoToDataUrl(file,192);S.profile=Object.assign({},S.profile,{photo:d});markState();render();toast("Profile photo updated",null);pushPhoto()}
-  catch(e){toast("Couldn’t use that image. Try a JPG or PNG photo.",null)}
+  catch(e){toast("Couldn’t open that photo. Try a JPG, PNG or HEIC photo.",null)}
 }
 function removePhoto(){const p=Object.assign({},S.profile);delete p.photo;S.profile=p;markState();render();toast("Photo removed",null);pushPhoto()}
 /* Also show it on the leaderboard and in Admin (separate write so a missing rule can't block anything else). */
@@ -581,7 +589,7 @@ async function pushPhoto(){
 }
 function photoBlock(name){
   const has=!!(S.profile&&S.profile.photo);
-  return '<div class="pfp">'+avHtml(name,myPhoto(),"xl")+'<div class="pfp-b"><label class="btn ghost pfp-up"><input type="file" id="photoIn" accept="image/*">'+(myPhoto()?"Change photo":"Add photo")+'</label>'+
+  return '<div class="pfp">'+avHtml(name,myPhoto(),"xl")+'<div class="pfp-b"><label class="btn ghost pfp-up"><input type="file" id="photoIn" accept="image/*,.heic,.heif">'+(myPhoto()?"Change photo":"Add photo")+'</label>'+
     (has?'<button class="link" data-act="rmphoto" type="button">Remove photo</button>':'')+'</div></div>';
 }
 function genderCard(){
@@ -980,7 +988,7 @@ function workoutPhoto(w){
   if(!phLoading[w.id]){phLoading[w.id]=1;(async()=>{
     let d=await idbGet(phKey(w.id));
     if(!d&&fdb&&user&&!isGuest()&&navigator.onLine){try{const sn=await timeout(FB.getDoc(FB.doc(fdb,"users",user.id,"photos",w.id)),12000);if(sn.exists()){d=sn.data().data;if(d)idbSet(phKey(w.id),d)}}catch(e){}}
-    if(d){PH[w.id]=d;refreshPhotos(w.id)}else phLoading[w.id]=0;
+    if(d){PH[w.id]=d}else phLoading[w.id]="none";refreshPhotos(w.id);
   })()}
   return"";
 }
@@ -997,7 +1005,7 @@ async function uploadPhoto(wid){
 function retryPhotos(){const p=phPending();Object.keys(p).forEach(uploadPhoto)}
 async function setWorkoutPhoto(wid,file){
   const w=S.workouts.find(x=>x.id===wid);if(!w)return;
-  let d;try{d=await photoToStory(file)}catch(e){toast("Couldn’t use that image. Try a JPG or PNG photo.",null);return}
+  let d;try{d=await photoToStory(file)}catch(e){toast("Couldn’t open that photo. Try a JPG, PNG or HEIC photo.",null);return}
   PH[wid]=d;idbSet(phKey(wid),d);if(!w.photo){w.photo=true;markUp(wid)}save();
   refreshPhotos(wid);toast("Photo added",null);uploadPhoto(wid);
 }
@@ -1007,25 +1015,21 @@ function removeWorkoutPhoto(wid){
 }
 /* Resize keeping the shape, longest side 1080px, JPEG — about 100–250 KB. */
 function photoToStory(file){
-  return new Promise((res,rej)=>{
-    if(!file||!/^image\//.test(file.type)){rej(new Error("type"));return}
-    const url=URL.createObjectURL(file),img=new Image();
-    img.onload=()=>{const W=img.naturalWidth,H=img.naturalHeight;if(!W||!H){URL.revokeObjectURL(url);rej(new Error("size"));return}
-      const k=Math.min(1,1080/Math.max(W,H)),cv=document.createElement("canvas");cv.width=Math.round(W*k);cv.height=Math.round(H*k);
-      const c=cv.getContext("2d");c.imageSmoothingQuality="high";c.drawImage(img,0,0,cv.width,cv.height);URL.revokeObjectURL(url);
-      let q=.82,d=cv.toDataURL("image/jpeg",q);while(d.length>700000&&q>.4){q-=.1;d=cv.toDataURL("image/jpeg",q)}res(d)};
-    img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error("decode"))};img.src=url;
-  });
+  return loadImageFile(file).then(img=>{const W=img.naturalWidth,H=img.naturalHeight;if(!W||!H)throw new Error("size");
+    const k=Math.min(1,1080/Math.max(W,H)),cv=document.createElement("canvas");cv.width=Math.round(W*k);cv.height=Math.round(H*k);
+    const c=cv.getContext("2d");c.imageSmoothingQuality="high";c.drawImage(img,0,0,cv.width,cv.height);
+    let q=.82,d=cv.toDataURL("image/jpeg",q);while(d.length>700000&&q>.4){q-=.1;d=cv.toDataURL("image/jpeg",q)}return d});
 }
 /* mode "cele" = celebration screen, "feed" = Home card */
 function photoSlot(wid,mode){
   const w=S.workouts.find(x=>x.id===wid),ph=w?workoutPhoto(w):"";
   const cam='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="4"/></svg>';
   if(ph)return '<figure class="wph"><img src="'+esc(ph)+'" alt="Post-workout photo"></figure>'+
-    (mode==="feed-ro"?'':'<div class="wph-a"><label class="link"><input type="file" accept="image/*" data-phin="'+wid+'">Change photo</label><button class="link" type="button" data-phrm="'+wid+'">Remove</button></div>');
-  if(w&&w.photo)return '<figure class="wph loading"><span>Loading photo…</span></figure>';
+    (mode==="feed-ro"?'':'<div class="wph-a"><label class="link"><input type="file" accept="image/*,.heic,.heif" data-phin="'+wid+'">Change photo</label><button class="link" type="button" data-phrm="'+wid+'">Remove</button></div>');
+  if(w&&w.photo&&phLoading[w.id]!=="none")return '<figure class="wph loading"><span>Loading photo…</span></figure>';
+  if(w&&w.photo&&mode==="feed-ro")return '<p class="sub wph-miss">Photo is on another device and hasn’t synced yet.</p>';
   if(mode==="feed-ro")return"";
-  return '<label class="wph-add'+(mode==="cele"?" big":"")+'"><input type="file" accept="image/*" data-phin="'+wid+'">'+cam+'<span><b>Add your post-workout photo</b><small>'+(mode==="cele"?"It goes on your story and your Home feed":"Show off the pump")+'</small></span></label>';
+  return '<label class="wph-add'+(mode==="cele"?" big":"")+'"><input type="file" accept="image/*,.heic,.heif" data-phin="'+wid+'">'+cam+'<span><b>Add your post-workout photo</b><small>'+(mode==="cele"?"It goes on your story and your Home feed":"Show off the pump")+'</small></span></label>';
 }
 document.addEventListener("change",e=>{const t=e.target;if(t&&t.dataset&&t.dataset.phin){const f=t.files&&t.files[0];const wid=t.dataset.phin;t.value="";if(f)setWorkoutPhoto(wid,f)}});
 document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-phrm]");if(b){e.stopPropagation();removeWorkoutPhoto(b.dataset.phrm)}},true);

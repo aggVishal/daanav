@@ -23,7 +23,7 @@ A gym workout tracker: pick a body part, choose an exercise, log each set's weig
 - Profile photo (resized on the phone; Google photo used by default)
 - Asks Female / Male / Prefer not to say and orders body parts and exercises to suit (new Glutes day: hip thrust, glute bridge, kickbacks, sumo squat, abduction and more)
 - Home feed of your workouts with your week streak (Strava-style)
-- Post-workout photo on the celebration screen, your story image and the Home feed
+- Post-workout photo on the celebration screen, your story image and the Home feed (iPhone HEIC photos work in every browser via heic2any, MIT)
 - Trophy case: 29 Daanav trophies for showing up, consistency, strength, intensity and variety — you vs you
 - Share your weekly or monthly recap as a story image from the Progress tab
 - Back button / swipe-back works on every screen

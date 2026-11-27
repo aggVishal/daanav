@@ -20,6 +20,7 @@ A gym workout tracker: pick a body part, choose an exercise, log each set's weig
 - An animated celebration when you finish a workout
 - Consistency calendar with ticked training days, week streak and best streak
 - Share your finished workout (with your month calendar and streak) as an Instagram or WhatsApp story image
+- Profile photo (resized on the phone; Google photo used by default)
 - Asks Female / Male / Prefer not to say and orders body parts and exercises to suit (new Glutes day: hip thrust, glute bridge, kickbacks, sumo squat, abduction and more)
 - Opt-in leaderboard: days trained, week streak, PRs and volume, this week or this month
 - Share your weekly or monthly recap as a story image from the Progress tab

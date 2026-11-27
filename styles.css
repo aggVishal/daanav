@@ -593,3 +593,15 @@ nav button{font-size:12px}
 .urow small.r b.ago{display:block;font-size:13px;color:var(--ink);font-weight:700}
 .urow small.r b.ago.hot{color:var(--good)}
 .av.live{box-shadow:0 0 0 2px var(--card),0 0 0 4px var(--good)}
+
+/* ---------- Profile photo ---------- */
+.av{position:relative;overflow:hidden}
+.av img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit}
+.av i{font-style:normal}
+.av img+i{visibility:hidden}
+.av.xl{width:84px;height:84px;font-size:34px}
+.pfp{display:flex;align-items:center;gap:16px;margin:4px 0 14px}
+.pfp-b{display:grid;gap:4px;justify-items:start}
+.pfp-up{position:relative;min-height:44px;padding:0 16px;font-size:15px;cursor:pointer;display:inline-flex;align-items:center}
+.pfp-up input{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;font-size:16px}
+.pfp-up:focus-within{outline:2px solid var(--accent);outline-offset:2px}

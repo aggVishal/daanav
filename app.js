@@ -421,13 +421,48 @@ function viewGuestAccount(){
   let h='<section class="card guestnote big"><div class="gn-t"><b>Sign up free to monitor your progress properly</b><small>Right now '+(n?n+' workout'+(n===1?' is':'s are'):'everything is')+' saved only on this phone. Clearing Safari data or losing the phone loses it. Create a free account and your workouts so far move into it automatically.</small></div>'+
     '<button class="btn wide" data-act="guestsignup">Create free account</button><button class="link" data-act="guestsignin" style="margin-top:6px">I already have an account · Sign in</button></section>';
   const ct=curTheme();
-  h+=genderSection();
+  h+=(isGuest()?'<section class="card"><h3>Profile photo</h3>'+photoBlock("G")+'</section>':'')+genderSection();
   h+='<section class="card"><h3>Theme</h3><div class="themes" role="radiogroup" aria-label="App theme">'+THEMES.map(t=>
     '<button class="theme" role="radio" aria-checked="'+(t.id===ct)+'" data-themepick="'+t.id+'"><span class="sw" style="background:'+t.bg+';color:'+t.fg+';font:'+t.font+'">Aa</span>'+
     '<span><b>'+t.name+(t.id==="red"?' <small style="display:inline;font-weight:600">· default</small>':'')+'</b><small>'+t.desc+'</small></span>'+
     '<span class="tick" aria-hidden="true">'+(t.id===ct?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>':'')+'</span></button>').join("")+'</div></section>';
   h+='<section class="card"><button class="btn danger wide" data-act="guestexit">'+SIGNOUT_ICON+'Leave trial mode</button><p class="sub" style="margin:10px 0 0">Your trial workouts stay on this phone and come back if you try again or sign up.</p></section>';
   return h;
+}
+/* ---------- Profile photo: resized on the phone to a small square JPEG and kept with the profile ---------- */
+const myPhoto=()=>(S.profile&&S.profile.photo)||(user&&!user.guest&&user.photoURL)||"";
+const safePhoto=p=>typeof p==="string"&&(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(p)||/^https:\/\/[^\s"'<>]+$/.test(p))?p:"";
+function avHtml(name,photo,cls){
+  const ph=safePhoto(photo),ini=esc(((String(name||"").trim()[0])||"?").toUpperCase());
+  return '<span class="av'+(cls?" "+cls:"")+(ph?" pic":"")+'" aria-hidden="true">'+(ph?'<img src="'+esc(ph)+'" alt="" referrerpolicy="no-referrer" onerror="this.remove()">':'')+'<i>'+ini+'</i></span>';
+}
+function photoToDataUrl(file,size){
+  return new Promise((res,rej)=>{
+    if(!file||!/^image\//.test(file.type)){rej(new Error("type"));return}
+    const url=URL.createObjectURL(file),img=new Image();
+    img.onload=()=>{const s=Math.min(img.naturalWidth,img.naturalHeight);if(!s){URL.revokeObjectURL(url);rej(new Error("size"));return}
+      const cv=document.createElement("canvas");cv.width=cv.height=size;const c=cv.getContext("2d");
+      c.imageSmoothingQuality="high";c.drawImage(img,(img.naturalWidth-s)/2,(img.naturalHeight-s)/2,s,s,0,0,size,size);
+      URL.revokeObjectURL(url);res(cv.toDataURL("image/jpeg",0.82))};
+    img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error("decode"))};
+    img.src=url;
+  });
+}
+async function setPhoto(file){
+  try{const d=await photoToDataUrl(file,192);S.profile=Object.assign({},S.profile,{photo:d});markState();render();toast("Profile photo updated",null);pushPhoto()}
+  catch(e){toast("Couldn’t use that image. Try a JPG or PNG photo.",null)}
+}
+function removePhoto(){const p=Object.assign({},S.profile);delete p.photo;S.profile=p;markState();render();toast("Photo removed",null);pushPhoto()}
+/* Also show it on the leaderboard and in Admin (separate write so a missing rule can't block anything else). */
+async function pushPhoto(){
+  if(!fdb||!user||isGuest()||!navigator.onLine)return;const ph=safePhoto(myPhoto());
+  try{await timeout(FB.setDoc(FB.doc(fdb,"users",user.id),{photo:ph},{merge:true}),10000)}catch(e){}
+  if(lbJoined())try{await timeout(FB.setDoc(FB.doc(fdb,"leaderboard",user.id),{photo:ph},{merge:true}),10000)}catch(e){}
+}
+function photoBlock(name){
+  const has=!!(S.profile&&S.profile.photo);
+  return '<div class="pfp">'+avHtml(name,myPhoto(),"xl")+'<div class="pfp-b"><label class="btn ghost pfp-up"><input type="file" id="photoIn" accept="image/*">'+(myPhoto()?"Change photo":"Add photo")+'</label>'+
+    (has?'<button class="link" data-act="rmphoto" type="button">Remove photo</button>':'')+'</div></div>';
 }
 function genderCard(){
   return '<section class="card gcard"><h3>Who’s training?</h3><p class="sub">We’ll put the body parts and exercises that suit you first. You can change this any time in Account.</p><div class="gopts">'+
@@ -444,13 +479,13 @@ function viewAccount(){
   const pv=user.providers||[],pw=pv.includes("password");
   const phone=acctDraft?acctDraft.ph:(S.profile&&S.profile.phone)||user.phone||"";
   const nmv=acctDraft?acctDraft.nm:user.name||"";
-  let h='<section class="card"><h3>Profile</h3><form id="profileForm">'+
+  let h='<section class="card"><h3>Profile</h3>'+photoBlock(nmv||user.email)+'<form id="profileForm">'+
     '<label class="fl" for="nm">Name</label><input type="text" id="nm" maxlength="40" autocomplete="name" placeholder="Your name" value="'+esc(nmv)+'">'+
     '<label class="fl" for="ph">Phone number</label><input type="tel" id="ph" maxlength="20" autocomplete="tel" inputmode="tel" placeholder="e.g. 98765 43210" value="'+esc(phone)+'">'+
     '<button class="btn wide" type="submit" style="margin-top:14px">Save</button></form><p class="msg">'+esc(acctMsg.name||"")+'</p>'+
     (user.email?'<dl class="facts"><div><dt>Email</dt><dd>'+esc(user.email)+'</dd></div></dl>':'')+'</section>';
   const ct=curTheme();
-  h+=genderSection();
+  h+=(isGuest()?'<section class="card"><h3>Profile photo</h3>'+photoBlock("G")+'</section>':'')+genderSection();
   h+='<section class="card"><h3>Theme</h3><div class="themes" role="radiogroup" aria-label="App theme">'+THEMES.map(t=>
     '<button class="theme" role="radio" aria-checked="'+(t.id===ct)+'" data-themepick="'+t.id+'"><span class="sw" style="background:'+t.bg+';color:'+t.fg+';font:'+t.font+'">Aa</span>'+
     '<span><b>'+t.name+(t.id==="red"?' <small style="display:inline;font-weight:600">· default</small>':'')+'</b><small>'+t.desc+'</small></span>'+
@@ -603,7 +638,7 @@ function render(){
   document.getElementById("hello").textContent=signedIn&&firstName()?"Hi, "+firstName():"";
   const mb=document.getElementById("menuBtn");mb.hidden=!signedIn;
   document.getElementById("backBtn").hidden=!(signedIn&&["account","plans","invite","admin"].includes(tab));
-  if(signedIn){const nm=isGuest()?"G":((user.name||user.email||"D").trim()[0]||"D").toUpperCase();mb.querySelector(".av").textContent=nm}
+  if(signedIn){const nm=isGuest()?"G":(user.name||user.email||"D");const old=mb.querySelector(".av");const tmp=document.createElement("div");tmp.innerHTML=avHtml(nm,myPhoto());if(old.outerHTML!==tmp.firstChild.outerHTML)old.replaceWith(tmp.firstChild)}
   if(!signedIn){app.innerHTML=viewAuth();return}
   if(tab==="admin"&&!isAdmin())tab="account";
   if(tab==="invite"&&(isGuest()||!(CONF.referral.enabled||isAdmin())))tab="account";
@@ -961,6 +996,7 @@ app.addEventListener("click",e=>{
     case"signout":signOut();break;
     case"shareinvite":shareInvite();break;
     case"lbjoin":lbJoin();break;
+    case"rmphoto":removePhoto();break;
     case"lbleave":lbLeave();break;
     case"pickdate":openDatePicker(b.dataset.for);break;
     case"sharerecap":{const sp=recapSpec(period);if(!sp.count){toast("Log a workout "+(period==="week"?"this week":"this month")+" first",null);break}openShare(sp);break}
@@ -981,6 +1017,7 @@ app.addEventListener("click",e=>{
 });
 app.addEventListener("input",e=>{const k=e.target.dataset&&e.target.dataset.draft;if(k)draft[k]=e.target.value});
 app.addEventListener("change",async e=>{
+  if(e.target.id==="photoIn"){const f=e.target.files&&e.target.files[0];e.target.value="";if(f)setPhoto(f);return}
   if(e.target.id==="exSel"){progEx=e.target.value;render();return}
 
   if(e.target.id==="actMinsIn"&&S.active){const n=parseInt(e.target.value,10);S.active.mins=n>0?Math.max(5,Math.min(300,n)):60;markState();return}
@@ -1027,7 +1064,7 @@ function handleSession(u){
   ready=true;
   if(!u){if(isGuest()){render();return}if(guestFlag()){enterGuest();return}if(user){user=null;S=blank()}render();return}
   if(user&&user.id===u.id){if(!user.providers||!user.providers.length){user.providers=u.providers||[];user.phone=u.phone||user.phone}user.emailVerified=user.emailVerified||!!u.verified;return}
-  user={id:u.id,email:u.email||"",name:u.name||pendingName||"",phone:u.phone||"",providers:u.providers||[],emailVerified:!!u.verified};pendingName="";
+  user={id:u.id,email:u.email||"",name:u.name||pendingName||"",phone:u.phone||"",providers:u.providers||[],emailVerified:!!u.verified,photoURL:u.photoURL||""};pendingName="";
   authOpen=false;
   saveLast();
   loadCache();mergeGuest();
@@ -1052,7 +1089,7 @@ function lbSoon(){if(!lbJoined()||isGuest())return;clearTimeout(lbTimer);lbTimer
 async function lbPublish(force){
   if(!fdb||!user||isGuest()||!lbJoined()||!navigator.onLine)return;
   const sum=lbSummary(),sig=JSON.stringify(sum);if(!force&&sig===lbLast)return;
-  try{await timeout(FB.setDoc(FB.doc(fdb,"leaderboard",user.id),Object.assign(sum,{updatedAt:stamp()})),10000);lbLast=sig;
+  try{await timeout(FB.setDoc(FB.doc(fdb,"leaderboard",user.id),Object.assign(sum,{updatedAt:stamp()}),{merge:true}),10000);lbLast=sig;
     if(lbRows){lbRows=lbRows.filter(r=>r.id!==user.id).concat([Object.assign({id:user.id},lbSummary())]);if(tab==="leaderboard")render()}}catch(e){}
 }
 async function lbLoad(){
@@ -1085,7 +1122,7 @@ function viewLeaderboard(){
     if(!rows.length)h+='<p class="sub">Nobody on the board yet. Log a workout and be the first!</p>';
     else{let rank=0,prevV=null;
       h+='<ol class="lb">'+rows.slice(0,50).map((x,i)=>{if(x.v!==prevV){rank=i+1;prevV=x.v}const me=user&&x.r.id===user.id;
-        return '<li class="'+(me?"me":"")+(rank<=3?" top r"+rank:"")+'"><span class="rk">'+rank+'</span><span class="av sm">'+esc((String(x.r.name||"?").trim()[0]||"?").toUpperCase())+'</span><span class="nm">'+esc(x.r.name||"Lifter")+(me?' <small>You</small>':'')+'</span><b class="num">'+(lbMetric==="vol"?fmt(x.v):x.v)+'<small> '+(lbMetric==="vol"?"kg":lbMetric==="days"?(x.v===1?"day":"days"):lbMetric==="streak"?(x.v===1?"wk":"wks"):"")+'</small></b></li>'}).join("")+'</ol>';
+        return '<li class="'+(me?"me":"")+(rank<=3?" top r"+rank:"")+'"><span class="rk">'+rank+'</span>'+avHtml(x.r.name,me?myPhoto():x.r.photo,"sm")+'<span class="nm">'+esc(x.r.name||"Lifter")+(me?' <small>You</small>':'')+'</span><b class="num">'+(lbMetric==="vol"?fmt(x.v):x.v)+'<small> '+(lbMetric==="vol"?"kg":lbMetric==="days"?(x.v===1?"day":"days"):lbMetric==="streak"?(x.v===1?"wk":"wks"):"")+'</small></b></li>'}).join("")+'</ol>';
       if(lbJoined()&&!rows.some(x=>x.r.id===user.id))h+='<p class="sub" style="margin:10px 0 0">You’re not on this board yet. Train '+(lbPeriod==="week"?"this week":"this month")+' to get on it.</p>';
     }
     if(lbMsg)h+='<p class="msg">'+esc(lbMsg)+'</p>';
@@ -1099,7 +1136,7 @@ async function lbJoin(){
   if(!navigator.onLine){toast("You’re offline. Connect to join.",null);return}
   lbBusy=true;render();
   S.profile=Object.assign({},S.profile,{lb:true});markState();
-  await lbPublish(true);lbBusy=false;lbLoaded=false;lbLoad();render();toast("You’re on the leaderboard",null);
+  await lbPublish(true);pushPhoto();lbBusy=false;lbLoaded=false;lbLoad();render();toast("You’re on the leaderboard",null);
 }
 async function lbLeave(){
   S.profile=Object.assign({},S.profile,{lb:false});markState();lbLast="";
@@ -1170,7 +1207,7 @@ const I_TAG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-w
 function drawerHtml(){
   const g=isGuest(),nm=g?"Guest":(user.name||"Your account"),sub=g?"Trying without an account":(user.email||"");
   const it=(id,icon,label,note)=>'<button class="dr-it'+(tab===id?' on':'')+'" data-dr="'+id+'">'+icon+'<span><b>'+label+'</b><small>'+note+'</small></span><i aria-hidden="true">›</i></button>';
-  let h='<div class="dr-head"><span class="av" aria-hidden="true">'+esc((nm.trim()[0]||"D").toUpperCase())+'</span><span class="dr-who"><b>'+esc(nm)+'</b><small>'+esc(sub)+'</small></span>'+
+  let h='<div class="dr-head">'+avHtml(nm,myPhoto())+'<span class="dr-who"><b>'+esc(nm)+'</b><small>'+esc(sub)+'</small></span>'+
     '<button class="dr-x" data-dr="close" aria-label="Close menu"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div><div class="dr-list">';
   h+=it("account",I_USER,"Account",g?"Theme, sign up":"Profile, theme, password");
   if(CONF.pricing.enabled||isAdmin())h+=it("plans",I_TAG,"Plans",CONF.pricing.enabled?(offerLive()?CONF.offer.percent+"% off · "+esc(CONF.offer.label):"Daanav Pro"):"Hidden from users (admin preview)");
@@ -1331,7 +1368,7 @@ function viewAdmin(){
       let last="";
       h+=list.length?list.slice(0,300).map(u=>{let hd="";if(admSort!=="new"){const g=grp(u);if(g!==last){last=g;hd='<h4 class="ugrp">'+g+'</h4>'}}
         const t=seen(u),live=t>now-15*60000;
-        return hd+'<div class="urow"><span class="av sm'+(live?' live':'')+'">'+esc(((u.name||u.email||"?").trim()[0]||"?").toUpperCase())+'</span><div><b>'+esc(u.name||"No name")+'</b><small>'+esc(u.email||"")+'</small></div>'+
+        return hd+'<div class="urow">'+avHtml(u.name||u.email,u.photo,"sm"+(live?" live":""))+'<div><b>'+esc(u.name||"No name")+'</b><small>'+esc(u.email||"")+'</small></div>'+
           '<small class="r"><b class="ago'+(t>now-D?' hot':'')+'">'+(t?ago(t):"–")+'</b>Joined '+(tsDate(u.joined)||"–")+'</small></div>'}).join(""):'<p class="sub">No users match.</p>';
       h+='</div><p class="sub" style="margin:10px 0 0">“Last used” updates whenever someone opens the app (at most every 15 minutes). People appear after they open the updated app once. Guests aren’t listed.</p>'+amsg("users")+'</section>'}
   }else{
@@ -1408,7 +1445,7 @@ async function boot(){
   const fapp=FB.initializeApp(fc);
   fbAuth=FB.getAuth(fapp);fdb=FB.getFirestore(fapp);
   render();
-  FB.onAuthStateChanged(fbAuth,u=>setTimeout(()=>handleSession(u?{id:u.uid,email:u.email||"",name:u.displayName||"",phone:u.phoneNumber||"",providers:(u.providerData||[]).map(p=>p.providerId),verified:!!u.emailVerified,created:u.metadata&&u.metadata.creationTime||""}:null),0));
+  FB.onAuthStateChanged(fbAuth,u=>setTimeout(()=>handleSession(u?{id:u.uid,email:u.email||"",name:u.displayName||"",phone:u.phoneNumber||"",providers:(u.providerData||[]).map(p=>p.providerId),photoURL:u.photoURL||"",verified:!!u.emailVerified,created:u.metadata&&u.metadata.creationTime||""}:null),0));
   loadConf();
   addEventListener("online",()=>{setSync("saving");syncNow()});
   addEventListener("offline",()=>setSync("offline"));

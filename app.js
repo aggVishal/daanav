@@ -583,6 +583,7 @@ function render(){
   setSync(syncState);
   document.getElementById("hello").textContent=signedIn&&firstName()?"Hi, "+firstName():"";
   const mb=document.getElementById("menuBtn");mb.hidden=!signedIn;
+  document.getElementById("backBtn").hidden=!(signedIn&&["account","plans","invite","admin"].includes(tab));
   if(signedIn){const nm=isGuest()?"G":((user.name||user.email||"D").trim()[0]||"D").toUpperCase();mb.querySelector(".av").textContent=nm}
   if(!signedIn){app.innerHTML=viewAuth();return}
   if(tab==="admin"&&!isAdmin())tab="account";
@@ -596,7 +597,29 @@ function render(){
   ro.disconnect();const f=document.getElementById("fig");if(f){ro.observe(f);drawChart()}
   msgText="";
 }
-function go(t){tab=t;render();window.scrollTo(0,0);app.classList.remove("enter");void app.offsetWidth;app.classList.add("enter");clearTimeout(go.t);go.t=setTimeout(()=>app.classList.remove("enter"),700)}
+/* ---------- Back button / swipe-back: every screen and pop-up gets a history entry ---------- */
+const NAV=window.history;let skipPop=0;
+const navState=()=>NAV.state||{};
+function navPush(extra){try{NAV.pushState(Object.assign({tab},extra||{}),"")}catch(e){}}
+function navReplace(st){try{NAV.replaceState(st,"")}catch(e){}}
+function navPopIf(key,val){if(navState()[key]===val){skipPop++;NAV.back()}}
+try{NAV.replaceState({tab:"workout",root:1},"")}catch(e){}
+addEventListener("popstate",e=>{
+  if(skipPop){skipPop--;return}
+  const st=e.state||{},sh=document.getElementById("share"),z=document.getElementById("zoom"),ce=document.getElementById("cele");
+  if(!sh.hidden){sh.hidden=true;return}
+  if(!z.hidden){closeZoom(true);return}
+  if(!drawer.hidden){closeDrawer(true);return}
+  if(!ce.hidden){closeCele(true);return}
+  if(!user){if(authMode!=="signin"){authMode="signin";authMsg="";render()}return}
+  if(isGuest()&&authOpen){authOpen=false;authMsg="";render();return}
+  const A=S.active;
+  if(A&&A.cur!=null&&tab==="workout"&&!st.ex){cleanActive();markState();render();window.scrollTo(0,0);return}
+  const t=st.tab||"workout";
+  if(t!==tab)go(t,true);else render();
+});
+function goBack(){const s=navState();if(!s.root&&s.tab===tab)NAV.back();else go("workout")}
+function go(t,noPush){if(!noPush&&t!==tab)try{NAV.pushState({tab:t},"")}catch(e){}tab=t;render();window.scrollTo(0,0);app.classList.remove("enter");void app.offsetWidth;app.classList.add("enter");clearTimeout(go.t);go.t=setTimeout(()=>app.classList.remove("enter"),700)}
 function startWorkout(p){
   const today=dkey(new Date()),past=logDate&&logDate<today?logDate:null;
   S.active=past?{id:uid(),date:past,start:parse(past).setHours(18,0,0,0),past:true,mins:Math.max(5,Math.min(300,pastMins||60)),parts:[p],ex:[],cur:null}
@@ -606,7 +629,7 @@ function startWorkout(p){
 function openEx(name,part){
   const A=S.active;let i=A.ex.findIndex(e=>e.name===name);
   if(i<0){A.ex.push({name,part,sets:[]});i=A.ex.length-1}
-  A.cur=i;draft={w:"",r:""};markState();render();window.scrollTo(0,0);
+  A.cur=i;draft={w:"",r:""};navPush({ex:1});markState();render();window.scrollTo(0,0);
 }
 function cleanActive(){const A=S.active;A.ex=A.ex.filter(e=>e.sets.length);A.cur=null}
 /* ---------- Auto-fit: shrink labels and numbers until they fit on one line ---------- */
@@ -639,10 +662,10 @@ function openZoom(name,part){
     '<div class="zcard"><h3>Muscles worked</h3><div class="zmus">'+mus.map(m=>'<span>'+L[m]+'</span>').join("")+'</div></div>'+
     '<div class="zcard"><h3>Tips</h3><ul>'+figTips(name,part).map(t=>'<li>'+esc(t)+'</li>').join("")+'</ul></div>'+
     '<button class="btn wide" data-zclose="1">Got it</button></div>';
-  z.hidden=false;document.body.classList.add("celebrating");z.scrollTop=0;
+  z.hidden=false;document.body.classList.add("celebrating");z.scrollTop=0;navPush({ov:"zoom"});
   setTimeout(()=>{const b=z.querySelector(".zclose");if(b)b.focus({preventScroll:true})},50);
 }
-function closeZoom(){const z=document.getElementById("zoom");if(z.hidden)return;z.hidden=true;z.innerHTML="";document.body.classList.remove("celebrating");render()}
+function closeZoom(fromPop){const z=document.getElementById("zoom");if(z.hidden)return;if(fromPop!==true)navPopIf("ov","zoom");z.hidden=true;z.innerHTML="";document.body.classList.remove("celebrating");render()}
 document.getElementById("zoom").addEventListener("click",e=>{
   if(e.target.closest("[data-zclose]")||e.target.id==="zoom"){closeZoom();return}
   const p=e.target.closest("[data-zpos]");if(!p)return;
@@ -654,7 +677,7 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closeZoom()});
 
 /* ---------- Workout-complete celebration ---------- */
 let celeData=null,celeRun=0,celeRaf=0;
-function celebrate(d){celeData=d;celeRun=0;showCele()}
+function celebrate(d){celeData=d;celeRun=0;showCele();navPush({ov:"cele"})}
 function showCele(){
   const d=celeData,el=document.getElementById("cele"),t=curTheme(),first=firstName();
   const msgs=[];
@@ -699,7 +722,7 @@ function showCele(){
   try{if(navigator.vibrate)navigator.vibrate([30,40,60])}catch(e){}
   setTimeout(()=>{const b=el.querySelector('[data-cele="done"]');if(b)b.focus({preventScroll:true})},1600);
 }
-function closeCele(){const el=document.getElementById("cele");el.hidden=true;el.innerHTML="";document.body.classList.remove("celebrating");cancelAnimationFrame(celeRaf);go("workout")}
+function closeCele(fromPop){if(fromPop!==true)navPopIf("ov","cele");const el=document.getElementById("cele");el.hidden=true;el.innerHTML="";document.body.classList.remove("celebrating");cancelAnimationFrame(celeRaf);go("workout",true)}
 document.getElementById("cele").addEventListener("click",e=>{const b=e.target.closest("[data-cele]");if(!b)return;if(b.dataset.cele==="done")closeCele();else if(b.dataset.cele==="share")openShare();else{celeRun++;showCele()}});
 
 /* ---------- Share workout as an Instagram / WhatsApp story image ---------- */
@@ -779,7 +802,7 @@ async function drawStory(d){
 }
 async function openShare(){
   const ov=document.getElementById("share");
-  ov.innerHTML='<div class="sh-card"><p class="sh-load">Making your story…</p></div>';ov.hidden=false;
+  ov.innerHTML='<div class="sh-card"><p class="sh-load">Making your story…</p></div>';ov.hidden=false;navPush({ov:"share"});
   shareBlob=null;try{shareBlob=await drawStory(celeData)}catch(e){}
   if(!shareBlob){ov.innerHTML='<div class="sh-card"><p>Couldn’t make the image on this device.</p><button class="btn wide" data-sh="close">Close</button></div>';return}
   if(shareUrl)URL.revokeObjectURL(shareUrl);shareUrl=URL.createObjectURL(shareBlob);
@@ -792,11 +815,11 @@ async function openShare(){
 }
 document.getElementById("share").addEventListener("click",e=>{
   const ov=e.currentTarget,b=e.target.closest("[data-sh]");
-  if(!b){if(e.target===ov)ov.hidden=true;return}
-  if(b.dataset.sh==="close"){ov.hidden=true;return}
+  if(!b){if(e.target===ov){ov.hidden=true;navPopIf("ov","share")}return}
+  if(b.dataset.sh==="close"){ov.hidden=true;navPopIf("ov","share");return}
   if(b.dataset.sh==="go"&&shareBlob){
     const f=new File([shareBlob],"daanav-workout.png",{type:"image/png"});
-    navigator.share({files:[f],title:"My Daanav workout"}).then(()=>{ov.hidden=true}).catch(()=>{});
+    navigator.share({files:[f],title:"My Daanav workout"}).then(()=>{ov.hidden=true;navPopIf("ov","share")}).catch(()=>{});
   }
 });
 
@@ -819,7 +842,7 @@ function finish(){
 app.addEventListener("click",e=>{
   const b=e.target.closest("button");if(!b)return;
   const d=b.dataset,A=S.active;
-  if(d.auth){authMode=d.auth;authMsg="";render();return}
+  if(d.auth){if(d.auth==="signin")navPopIf("auth",authMode);else if(authMode==="signin")navPush({auth:d.auth});else navReplace(Object.assign({},navState(),{auth:d.auth}));authMode=d.auth;authMsg="";render();return}
   if(d.logdate){logDate=d.logdate==="today"?null:d.logdate;render();return}
   if(d.zoom){const A2=S.active;if(A2&&A2.ex[A2.cur])openZoom(A2.ex[A2.cur].name,A2.ex[A2.cur].part);return}
   if(d.themepick){applyTheme(d.themepick);S.profile=Object.assign({},S.profile,{theme:d.themepick});markState();render();return}
@@ -843,8 +866,8 @@ app.addEventListener("click",e=>{
       const w=parseFloat(String(draft.w).replace(",",".")),r=parseInt(draft.r,10);
       if(!(w>=0)||!(r>0)){msgText="Enter a weight (0 for bodyweight) and at least 1 rep.";render();return}
       A.ex[A.cur].sets.push({w:Math.round(w*100)/100,r});popSet=true;markState();render();break}
-    case"doneex":cleanActive();draft={w:"",r:""};markState();render();window.scrollTo(0,0);break;
-    case"backex":cleanActive();markState();render();break;
+    case"doneex":cleanActive();draft={w:"",r:""};markState();render();window.scrollTo(0,0);navPopIf("ex",1);break;
+    case"backex":cleanActive();markState();render();navPopIf("ex",1);break;
     case"finish":finish();break;
     case"toggleParts":showAllParts=!showAllParts;render();break;
     case"discard":{const prev=S.active;S.active=null;pickPart=null;markState();render();window.scrollTo(0,0);
@@ -853,9 +876,9 @@ app.addEventListener("click",e=>{
     case"signout":signOut();break;
     case"shareinvite":shareInvite();break;
     case"guesttry":enterGuest();break;
-    case"guestsignup":authOpen=true;authMode="signup";authMsg="";render();window.scrollTo(0,0);break;
-    case"guestsignin":authOpen=true;authMode="signin";authMsg="";render();window.scrollTo(0,0);break;
-    case"guestback":authOpen=false;authMsg="";render();window.scrollTo(0,0);break;
+    case"guestsignup":navPush({auth:"open"});authOpen=true;authMode="signup";authMsg="";render();window.scrollTo(0,0);break;
+    case"guestsignin":navPush({auth:"open"});authOpen=true;authMode="signin";authMsg="";render();window.scrollTo(0,0);break;
+    case"guestback":navPopIf("auth","open");authOpen=false;authMsg="";render();window.scrollTo(0,0);break;
     case"guestexit":leaveGuest();break;
     case"logpast":
       if(S.active){go("workout");toast("Finish or discard your current workout first",null);break}
@@ -937,7 +960,8 @@ function defConf(){return{
   pricing:{enabled:false,currency:"INR",trialDays:7,plans:[
     {id:"monthly",name:"Monthly",price:199,months:1,active:true},
     {id:"quarterly",name:"3 months",price:499,months:3,active:true},
-    {id:"yearly",name:"Yearly",price:1499,months:12,active:true}]},
+    {id:"yearly",name:"Yearly",price:1499,months:12,active:true},
+    {id:"lifetime",name:"Lifetime",price:3999,months:0,active:false}]},
   offer:{active:false,percent:20,label:"Launch offer",endsOn:""},
   referral:{enabled:false,rewardDays:30,friendPercent:10},
   general:{guestMode:true,announcement:""}}}
@@ -996,19 +1020,20 @@ function drawerHtml(){
   return h;
 }
 const drawer=document.getElementById("drawer");
-function openDrawer(){if(!user)return;drawer.querySelector(".dr-panel").innerHTML=drawerHtml();drawer.hidden=false;void drawer.offsetWidth;drawer.classList.add("open");document.body.classList.add("drawer-open");
+function openDrawer(){if(!user)return;navPush({ov:"drawer"});drawer.querySelector(".dr-panel").innerHTML=drawerHtml();drawer.hidden=false;void drawer.offsetWidth;drawer.classList.add("open");document.body.classList.add("drawer-open");
   setTimeout(()=>{const x=drawer.querySelector(".dr-x");if(x)x.focus({preventScroll:true})},50)}
-function closeDrawer(){drawer.classList.remove("open");document.body.classList.remove("drawer-open");setTimeout(()=>{if(!drawer.classList.contains("open"))drawer.hidden=true},260)}
+function closeDrawer(fromPop){if(fromPop!==true)navPopIf("ov","drawer");drawer.classList.remove("open");document.body.classList.remove("drawer-open");setTimeout(()=>{if(!drawer.classList.contains("open"))drawer.hidden=true},260)}
 function leaveGuest(){try{localStorage.removeItem(GUEST)}catch(e){}user=null;S=blank();tab="workout";authOpen=false;authMode="signin";authMsg="";render();window.scrollTo(0,0)}
 document.getElementById("menuBtn").addEventListener("click",openDrawer);
+document.getElementById("backBtn").addEventListener("click",goBack);
 drawer.addEventListener("click",e=>{
   if(e.target===drawer){closeDrawer();return}
-  const b=e.target.closest("[data-dr]");if(!b)return;const a=b.dataset.dr;closeDrawer();
-  if(a==="close")return;
-  if(a==="signout")signOut();
-  else if(a==="guestexit")leaveGuest();
-  else if(a==="signup"){authOpen=true;authMode="signup";authMsg="";render();window.scrollTo(0,0)}
-  else{if(a==="admin"){admLoaded={}}go(a)}
+  const b=e.target.closest("[data-dr]");if(!b)return;const a=b.dataset.dr;
+  if(a==="close"||a==="signout"||a==="guestexit"){closeDrawer();if(a==="signout")signOut();else if(a==="guestexit")leaveGuest();return}
+  if(a==="signup"){navReplace({tab,auth:"open"});closeDrawer(true);authOpen=true;authMode="signup";authMsg="";render();window.scrollTo(0,0);return}
+  if(a==="admin")admLoaded={};
+  if(a===tab){closeDrawer();return}
+  navReplace({tab:a});closeDrawer(true);go(a,true);
 });
 addEventListener("keydown",e=>{if(e.key==="Escape"&&!drawer.hidden)closeDrawer()});
 
@@ -1024,7 +1049,7 @@ function viewPlans(){
   for(const p of plans){const now=priceAfter(p,couponOk),cut=now<p.price;
     h+='<div class="plan'+(p.id==="yearly"?' best':'')+'">'+(p.id==="yearly"?'<span class="pbadge">Best value</span>':'')+'<b class="pn">'+esc(p.name)+'</b>'+
       '<div class="pp"><span class="num">'+money(now)+'</span>'+(cut?'<s>'+money(p.price)+'</s>':'')+'</div>'+
-      '<small>'+(p.months>1?money(now/p.months)+' per month':'per month')+'</small></div>'}
+      '<small>'+(!p.months?'one-time payment · yours forever':p.months>1?money(Math.round(now/p.months))+' per month':'per month')+'</small></div>'}
   h+='</div><form id="couponForm" class="coupon"><input type="text" id="couponCode" maxlength="20" autocapitalize="characters" placeholder="Coupon code" value="'+esc(couponIn)+'"><button class="btn" type="submit"'+(couponBusy?" disabled":"")+'>'+(couponBusy?"…":"Apply")+'</button></form>'+
     '<p class="msg'+(couponOk?' okmsg':'')+'">'+esc(couponMsg)+'</p>'+
     '<button class="btn wide" disabled style="margin-top:6px">Payments open soon</button><p class="sub" style="margin:8px 0 0;text-align:center">You won’t be charged yet. Everything stays free until payments open.</p></section>';
@@ -1099,7 +1124,7 @@ function viewAdmin(){
     h+='<section class="card"><h3>Pricing</h3><form id="admPricing">'+sw("enabled",P.enabled,"Show Plans to users","Adds “Plans” to everyone’s menu. Payments aren’t connected yet, so nobody is charged.")+
       '<div class="row2"><div><label class="fl">Currency</label><select name="currency">'+Object.keys(CUR_SYM).map(c=>'<option'+(c===P.currency?" selected":"")+'>'+c+'</option>').join("")+'</select></div><div>'+fnum("trialDays",P.trialDays,"Free trial (days)",'min="0" max="90" step="1"')+'</div></div>'+
       '<h4 class="sh">Plans</h4>'+P.plans.map(p=>'<div class="planrow"><span class="sw"><input type="checkbox" name="on_'+p.id+'"'+(p.active?" checked":"")+' aria-label="'+esc(p.name)+' on"><i></i></span>'+
-        '<input type="text" name="name_'+p.id+'" maxlength="24" value="'+esc(p.name)+'" aria-label="Plan name"><span class="cur">'+(CUR_SYM[P.currency]||"")+'</span><input type="number" inputmode="decimal" name="price_'+p.id+'" min="0" step="1" value="'+p.price+'" aria-label="'+esc(p.name)+' price"><small>'+p.months+' mo</small></div>').join("")+
+        '<input type="text" name="name_'+p.id+'" maxlength="24" value="'+esc(p.name)+'" aria-label="Plan name"><span class="cur">'+(CUR_SYM[P.currency]||"")+'</span><input type="number" inputmode="decimal" name="price_'+p.id+'" min="0" step="1" value="'+p.price+'" aria-label="'+esc(p.name)+' price"><small>'+(p.months?p.months+' mo':'once')+'</small></div>').join("")+
       saveBtn("Save pricing")+amsg("pricing")+'</form></section>';
     h+='<section class="card"><h3>Preview</h3><p class="sub">What users see on the Plans page right now'+(offerLive()?', with the '+O.percent+'% offer applied':'')+'.</p><div class="plans">'+P.plans.filter(p=>p.active).map(p=>'<div class="plan"><b class="pn">'+esc(p.name)+'</b><div class="pp"><span class="num">'+money(priceAfter(p))+'</span>'+(priceAfter(p)<p.price?'<s>'+money(p.price)+'</s>':'')+'</div></div>').join("")+'</div><button class="btn ghost wide" data-tab-go="plans" style="margin-top:12px">Open Plans page</button></section>';
   }else if(admSub==="offers"){

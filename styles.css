@@ -528,3 +528,7 @@ textarea{padding:12px 14px;resize:vertical;font:inherit;font-size:16px;margin-bo
 .cal .on i{display:grid;place-items:center;width:62%;height:62%}
 .cal .on i svg{width:100%;height:100%}
 .cele .dots i svg{width:18px;height:18px}
+/* header back button (Account, Plans, Invite, Admin) */
+.backbtn{display:inline-flex;align-items:center;gap:4px;min-height:40px;margin:0 0 6px -6px;padding:0 12px 0 4px;border-radius:999px;color:inherit;font-weight:700;font-size:15px;background:rgba(0,0,0,.18)}
+.backbtn[hidden]{display:none}
+[data-theme=chalk] .backbtn{background:rgba(11,11,11,.1)}

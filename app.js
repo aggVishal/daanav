@@ -186,7 +186,8 @@ function viewWorkout(){
       :'<div class="durrow"><label for="actDurIn">Workout time<small>'+(A.manual?'Set by you':'Started '+new Date(A.start).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})+' · counting')+'</small></label><span><input type="number" id="actDurIn" inputmode="numeric" min="1" max="300" step="5" value="'+liveMins(A)+'"> min</span></div>')+'</section>';
   if(!first){
     h+='<section class="card"><h3>'+(A.edit?"Exercises in this workout":"Done so far")+'</h3>'+(A.edit?'<p class="sub">Tap an exercise to change, add or delete its sets.</p>':'')+'<div class="done-ex">'+A.ex.filter(e=>e.sets.length).map(e=>
-      '<button class="done-row" data-ex="'+esc(e.name)+'" data-part="'+esc(e.part)+'"><span>'+esc(e.name)+'</span><span class="num">'+e.sets.map(s=>wl(s.w,1)+"×"+s.r).join(", ")+'</span><i aria-hidden="true">›</i></button>').join("")+'</div></section>';
+      '<div class="done-wrap"><button class="done-row" data-ex="'+esc(e.name)+'" data-part="'+esc(e.part)+'"><span>'+esc(e.name)+'</span><span class="num">'+e.sets.map(s=>wl(s.w,1)+"×"+s.r).join(", ")+'</span><i aria-hidden="true">›</i></button>'+
+      '<button class="x done-x" data-rmex="'+esc(e.name)+'" aria-label="Remove '+esc(e.name)+'">×</button></div>').join("")+'</div></section>';
   }
   h+='<section class="card"><h2>'+(first?"Choose your first exercise":"Choose your next exercise")+'</h2><p class="sub">Tap one to start logging sets.</p>';
   h+='<div class="chips">'+A.parts.map(p=>'<button class="chip'+(p===part?" on":"")+'" data-pick="'+p+'">'+p+'</button>').join("")+
@@ -230,8 +231,10 @@ function viewLogger(A){
   h+=editSet!=null?'<button class="btn wide log" data-act="logset">Update set '+(editSet+1)+'</button><button class="link" data-act="canceledit" style="display:block;margin:8px auto 0">Cancel editing set</button>'
     :'<button class="btn wide log" data-act="logset">Log set '+(E.sets.length+1)+'</button>';
   h+='<p class="msg" id="msg">'+esc(msgText)+'</p></section>';
-  h+='<div class="row" style="margin-bottom:8px"><button class="btn blue" data-act="doneex"'+(E.sets.length?'':' disabled')+'>Done, next exercise</button>'+
-     '<button class="btn ghost" data-act="'+(E.sets.length?"finish":"backex")+'">'+(E.sets.length?(A.edit?"Save changes":"Finish workout"):"Pick a different one")+'</button></div>';
+  const changed=exChanged(A);
+  h+='<div class="stickybar">'+(E.sets.length||!A.snapNew?'<p class="sub savenote">'+(changed?'Not saved yet. Going back without saving discards '+(A.snapNew?'this exercise':'these changes')+'.':'All sets saved.')+'</p>':'')+
+     '<div class="row"><button class="btn blue" data-act="doneex"'+(E.sets.length?'':' disabled')+'>Save exercise</button>'+
+     '<button class="btn ghost" data-act="backex">'+(A.snapNew?(E.sets.length?"Discard exercise":"Pick a different one"):(changed?"Discard changes":"Back"))+'</button></div></div>';
   popSet=false;
   return h;
 }
@@ -869,7 +872,7 @@ addEventListener("popstate",e=>{
   if(!user){if(authMode!=="signin"){authMode="signin";authMsg="";render()}return}
   if(isGuest()&&authOpen){authOpen=false;authMsg="";render();return}
   const A=S.active;
-  if(A&&A.cur!=null&&tab==="workout"&&!st.ex){cleanActive();markState();render();window.scrollTo(0,0);return}
+  if(A&&A.cur!=null&&tab==="workout"&&!st.ex){discardExercise(true);return}
   if(st.guard){try{NAV.pushState({tab:"home",root:1,d:1},"")}catch(x){}if(tab!=="home")go("home",true);else render();return}
   if(st.root){if(tab!=="home")go("home",true);else render();return}
   // landed on a page entry from something deeper: always continue to Home
@@ -898,8 +901,19 @@ function editWorkout(wid){
 }
 function openEx(name,part){
   const A=S.active;let i=A.ex.findIndex(e=>e.name===name);
+  A.snapNew=i<0;
   if(i<0){A.ex.push({name,part,sets:[]});i=A.ex.length-1}
+  A.snap=JSON.stringify(A.ex[i].sets);
   A.cur=i;draft={w:"",r:""};editSet=null;navPush({ex:1});markState();render();window.scrollTo(0,0);
+}
+function exChanged(A){const E=A&&A.ex[A.cur];return !!E&&(A.snapNew?E.sets.length>0:JSON.stringify(E.sets)!==A.snap)}
+function saveExercise(){const A=S.active;delete A.snap;delete A.snapNew;editSet=null;cleanActive();draft={w:"",r:""};markState();render();window.scrollTo(0,0);navPopIf("ex",1)}
+function discardExercise(fromPop){
+  const A=S.active;if(!A||A.cur==null)return;const E=A.ex[A.cur],had=exChanged(A);
+  if(E){if(A.snapNew)A.ex.splice(A.cur,1);else if(A.snap!=null)E.sets=JSON.parse(A.snap)}
+  delete A.snap;delete A.snapNew;editSet=null;cleanActive();draft={w:"",r:""};markState();render();window.scrollTo(0,0);
+  if(fromPop!==true)navPopIf("ex",1);
+  if(had)toast(E?(E.name+" not saved"):"Not saved",null);
 }
 function cleanActive(){const A=S.active;A.ex=A.ex.filter(e=>e.sets.length);A.cur=null}
 /* ---------- Auto-fit: shrink labels and numbers until they fit on one line ---------- */
@@ -924,13 +938,18 @@ function photoHtml(name,part,big){
 
 /* ---------- "How long was your workout?" — shown before saving when everything was logged in a few minutes ---------- */
 let finishConfirmed=false;
-function askDuration(el){
-  const box=document.getElementById("dpick");dp=null;
-  box.innerHTML='<div class="dp-card dur-card" role="dialog" aria-modal="true" aria-label="Workout time"><h3>How long did you train?</h3><p class="sub">You logged everything in '+pl(el,"minute")+'. If you added your sets after the gym, set your real workout time so your stats stay right.</p>'+
-    '<div class="durpick">'+[30,45,60,75,90].map(m=>'<button type="button" class="chip" data-durq="'+m+'">'+m+' min</button>').join("")+'</div>'+
-    '<div class="durrow"><label for="durSheetIn">Or type it</label><span><input type="number" id="durSheetIn" inputmode="numeric" min="1" max="300" step="5" value="60"> min</span></div>'+
-    '<button type="button" class="btn wide" data-durok="1" style="margin-top:12px">Save workout</button>'+
-    '<button type="button" class="link" data-durkeep="1" style="display:block;margin:10px auto 0">It really was '+pl(el,"minute")+'</button></div>';
+/* Finish → confirm with an editable workout time, then celebrate. */
+function askFinish(){
+  const A=S.active,box=document.getElementById("dpick");dp=null;
+  const el=A.past?(A.mins||60):liveMins(A),sets=A.ex.reduce((x,e)=>x+e.sets.length,0),vol=A.ex.reduce((x,e)=>x+e.sets.reduce((y,s)=>y+s.w*s.r,0),0);
+  const quick=!A.past&&!A.manual&&el<10&&sets>=4,def=quick?60:el;
+  box.innerHTML='<div class="dp-card dur-card" role="dialog" aria-modal="true" aria-label="Finish workout"><h3>Finish workout?</h3>'+
+    '<p class="fin-sum"><b>'+pl(A.ex.length,"exercise")+'</b> · <b>'+pl(sets,"set")+'</b>'+(vol?' · <b>'+fmt(Math.round(vol))+' kg</b>':'')+'</p>'+
+    '<div class="durrow"><label for="durSheetIn">Workout time<small>'+(A.past?long(A.date):'Started '+new Date(A.start).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}))+'</small></label><span><input type="number" id="durSheetIn" inputmode="numeric" min="1" max="300" step="5" value="'+def+'"> min</span></div>'+
+    (quick?'<p class="sub fin-note">You logged everything in '+pl(el,"minute")+', so we’ve suggested 60 min. Change it to your real time.</p>':'')+
+    '<div class="durpick">'+[30,45,60,75,90].map(m=>'<button type="button" class="chip'+(m===def?" on":"")+'" data-durq="'+m+'">'+m+' min</button>').join("")+'</div>'+
+    '<button type="button" class="btn wide" data-durok="1" style="margin-top:12px">Finish & save</button>'+
+    '<button type="button" class="link" data-dpclose="1" style="display:block;margin:10px auto 0">Keep training</button></div>';
   box.hidden=false;navPush({ov:"dpick"});
 }
 document.getElementById("dpick").addEventListener("click",e=>{
@@ -938,7 +957,7 @@ document.getElementById("dpick").addEventListener("click",e=>{
   const ok=e.target.closest("[data-durok]"),keep=e.target.closest("[data-durkeep]");if(!ok&&!keep)return;
   e.stopImmediatePropagation();
   const A=S.active;if(!A)return;
-  if(ok){const n=parseInt(document.getElementById("durSheetIn").value,10);if(n>0){A.mins=Math.max(1,Math.min(300,n));A.manual=true}}
+  if(ok){const n=parseInt(document.getElementById("durSheetIn").value,10);if(n>0){A.mins=Math.max(1,Math.min(300,n));if(!A.past)A.manual=true}}
   navReplace({tab});closeDatePicker(true);finishConfirmed=true;finish();
 },true);
 
@@ -1290,8 +1309,7 @@ function finish(){
     openId=w.id;goRootHome();window.scrollTo(0,0);toast("Workout updated",null);return;
   }
   if(!A.ex.length){S.active=null;markState();render();return}
-  if(!A.past&&!A.manual&&!finishConfirmed){const el=Math.round((Date.now()-A.start)/60000),n=A.ex.reduce((a,e)=>a+e.sets.length,0);
-    if(el<10&&n>=4){askDuration(Math.max(1,el));return}}
+  if(!finishConfirmed){askFinish();return}
   finishConfirmed=false;
   if(!A.past&&A.manual){const end=Date.now();A.start=end-A.mins*60000;A.end=end}
   let prs=0;const prList=[];
@@ -1325,6 +1343,8 @@ app.addEventListener("click",e=>{
   if(d.addpart){A.parts.push(d.addpart);pickPart=d.addpart;showAllParts=false;markState();render();return}
   if(d.ex){openEx(d.ex,d.part);return}
   if(d.step){const k=d.step,v=parseFloat(String(draft[k]).replace(",","."))||0,n=Math.max(0,Math.round((v+parseFloat(d.d))*100)/100);draft[k]=k==="r"?String(Math.round(n)):kg(n);render();return}
+  if(d.rmex){const i=A.ex.findIndex(e=>e.name===d.rmex);if(i<0)return;const [gone]=A.ex.splice(i,1);markState();render();
+    toast(gone.name+" removed",()=>{if(S.active&&!S.active.ex.some(e=>e.name===gone.name)){S.active.ex.splice(Math.min(i,S.active.ex.length),0,gone);markState();render()}});return}
   if(d.delset!=null){A.ex[A.cur].sets.splice(+d.delset,1);editSet=null;markState();render();return}
   if(d.editset!=null){const st=A.ex[A.cur].sets[+d.editset];if(st){editSet=+d.editset;draft={w:kg(st.w),r:String(st.r)};msgText="";render();const el=document.querySelector(".steppers");if(el)el.scrollIntoView({block:"center",behavior:"smooth"})}return}
   if(d.editw){editWorkout(d.editw);return}
@@ -1344,8 +1364,8 @@ app.addEventListener("click",e=>{
       if(editSet!=null&&A.ex[A.cur].sets[editSet]){A.ex[A.cur].sets[editSet]={w:Math.round(w*100)/100,r};editSet=null;msgText="";const E2=A.ex[A.cur],ls=E2.sets[E2.sets.length-1];draft={w:kg(ls.w),r:String(ls.r)};markState();render();toast("Set updated",null);break}
       A.ex[A.cur].sets.push({w:Math.round(w*100)/100,r});popSet=true;markState();render();break}
     case"canceledit":{editSet=null;const E2=A.ex[A.cur],ls=E2.sets[E2.sets.length-1];draft=ls?{w:kg(ls.w),r:String(ls.r)}:{w:"",r:""};render();break}
-    case"doneex":cleanActive();draft={w:"",r:""};markState();render();window.scrollTo(0,0);navPopIf("ex",1);break;
-    case"backex":cleanActive();markState();render();navPopIf("ex",1);break;
+    case"doneex":saveExercise();break;
+    case"backex":discardExercise();break;
     case"finish":finish();break;
     case"toggleParts":showAllParts=!showAllParts;render();break;
     case"discard":{const prev=S.active;if(prev&&prev.edit){S.active=null;editSet=null;markState();goRootHome();toast("No changes saved",null);break}S.active=null;pickPart=null;markState();render();window.scrollTo(0,0);

@@ -771,3 +771,8 @@ nav .fab-c{position:relative}
 .prs-row .prb{flex:none;font-size:11px}
 .prs-n{flex:1;min-width:0}.prs-n b{display:block;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.prs-n small{color:var(--mute);font-size:12px}
 .prs-v{text-align:right;flex:none}.prs-v b{display:block;font:var(--dw) 18px/1.1 var(--display);font-stretch:var(--ds)}.prs-v small{font-size:12px;font-weight:700}
+.done-wrap{display:flex;align-items:center;gap:6px;border-bottom:1px solid var(--line)}
+.done-wrap .done-row{border-bottom:0;flex:1;min-width:0}
+.done-x{flex:none;width:40px;height:40px}
+.toast{bottom:calc(178px + var(--safeB))}.savenote{text-align:center;margin:0 0 8px;font-size:13px}
+.fin-sum{margin:4px 0 8px;color:var(--mute)}.fin-sum b{color:var(--ink)}.fin-note{margin:6px 0 0;font-size:13px}

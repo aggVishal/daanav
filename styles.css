@@ -748,3 +748,12 @@ nav .fab-c{position:relative}
 .dur-card .durrow{margin-top:10px}
 .stickybar{bottom:calc(104px + var(--safeB))}
 .toast{bottom:calc(108px + var(--safeB))}
+
+/* ---------- Profile photo cropper ---------- */
+.crop-v{position:relative;width:280px;height:280px;margin:14px auto 12px;border-radius:20px;overflow:hidden;touch-action:none;cursor:grab;background:#000;user-select:none;-webkit-user-select:none}
+.crop-v:active{cursor:grabbing}
+.crop-v canvas{display:block;width:100%;height:100%}
+.crop-ring{position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 999px rgba(0,0,0,.55);outline:2px solid rgba(255,255,255,.9);outline-offset:-2px;pointer-events:none}
+.crop-z{display:flex;align-items:center;gap:12px;margin:0 6px 14px;font-weight:800;color:var(--mute);font-size:20px}
+.crop-z input{flex:1;accent-color:var(--accent);height:32px}
+@media(max-width:340px){.crop-v{width:240px;height:240px}}

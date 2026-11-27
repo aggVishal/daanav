@@ -585,10 +585,40 @@ function photoToDataUrl(file,size){
     c.imageSmoothingQuality="high";c.drawImage(img,(img.naturalWidth-s)/2,(img.naturalHeight-s)/2,s,s,0,0,size,size);
     return cv.toDataURL("image/jpeg",0.82)});
 }
+/* Pick → adjust (drag to move, pinch / slider to zoom) → Set as profile photo */
+let crop=null;
 async function setPhoto(file){
-  try{const d=await photoToDataUrl(file,192);S.profile=Object.assign({},S.profile,{photo:d});markState();render();toast("Profile photo updated",null);pushPhoto()}
-  catch(e){toast("Couldn’t open that photo. Try a JPG, PNG or HEIC photo.",null)}
+  let img;try{img=await loadImageFile(file)}catch(e){toast("Couldn’t open that photo. Try a JPG, PNG or HEIC photo.",null);return}
+  const V=280;crop={img,V,z:1,dx:0,dy:0,ptrs:{},pinch:null};
+  const box=document.getElementById("dpick");dp=null;
+  box.innerHTML='<div class="dp-card crop-card" role="dialog" aria-modal="true" aria-label="Adjust profile photo"><h3>Adjust your photo</h3><p class="sub">Drag to move, pinch or use the slider to zoom.</p>'+
+    '<div class="crop-v" id="cropV"><canvas id="cropC" width="'+V*2+'" height="'+V*2+'"></canvas><span class="crop-ring" aria-hidden="true"></span></div>'+
+    '<div class="crop-z"><span aria-hidden="true">−</span><input type="range" id="cropZ" min="1" max="4" step="0.01" value="1" aria-label="Zoom"><span aria-hidden="true">+</span></div>'+
+    '<button type="button" class="btn wide" data-cropset="1">Set as profile photo</button><button type="button" class="link" data-dpclose="1" style="display:block;margin:10px auto 0">Cancel</button></div>';
+  box.hidden=false;navPush({ov:"dpick"});drawCrop();
+  const v=document.getElementById("cropV");
+  v.addEventListener("pointerdown",e=>{v.setPointerCapture(e.pointerId);crop.ptrs[e.pointerId]={x:e.clientX,y:e.clientY};if(Object.keys(crop.ptrs).length===2)crop.pinch=pinchDist()},{passive:true});
+  v.addEventListener("pointermove",e=>{if(!crop||!crop.ptrs[e.pointerId])return;const p0=crop.ptrs[e.pointerId],n=Object.keys(crop.ptrs).length;
+    if(n===1){crop.dx+=e.clientX-p0.x;crop.dy+=e.clientY-p0.y}
+    crop.ptrs[e.pointerId]={x:e.clientX,y:e.clientY};
+    if(n===2&&crop.pinch){const d=pinchDist();setZoom(crop.z*d/crop.pinch);crop.pinch=d}
+    drawCrop()});
+  const up=e=>{if(crop){delete crop.ptrs[e.pointerId];crop.pinch=null}};v.addEventListener("pointerup",up);v.addEventListener("pointercancel",up);
+  v.addEventListener("wheel",e=>{e.preventDefault();setZoom(crop.z*(e.deltaY<0?1.08:1/1.08));drawCrop()},{passive:false});
+  document.getElementById("cropZ").addEventListener("input",e=>{setZoom(+e.target.value);drawCrop()});
 }
+function pinchDist(){const p=Object.values(crop.ptrs);return Math.hypot(p[0].x-p[1].x,p[0].y-p[1].y)||1}
+function setZoom(z){crop.z=Math.max(1,Math.min(4,z));const r=document.getElementById("cropZ");if(r)r.value=crop.z}
+function cropGeom(size){const{img,V}=crop,k=size/V,s0=Math.max(V/img.naturalWidth,V/img.naturalHeight),s=s0*crop.z,w=img.naturalWidth*s,h=img.naturalHeight*s;
+  crop.dx=Math.max(-(w-V)/2,Math.min((w-V)/2,crop.dx));crop.dy=Math.max(-(h-V)/2,Math.min((h-V)/2,crop.dy));
+  return{x:((V-w)/2+crop.dx)*k,y:((V-h)/2+crop.dy)*k,w:w*k,h:h*k}}
+function drawCrop(){const c=document.getElementById("cropC");if(!c||!crop)return;const x=c.getContext("2d"),g=cropGeom(c.width);x.fillStyle="#000";x.fillRect(0,0,c.width,c.height);x.imageSmoothingQuality="high";x.drawImage(crop.img,g.x,g.y,g.w,g.h)}
+document.getElementById("dpick").addEventListener("click",e=>{
+  if(!e.target.closest("[data-cropset]")||!crop)return;e.stopImmediatePropagation();
+  const out=document.createElement("canvas");out.width=out.height=256;const x=out.getContext("2d"),g=cropGeom(256);x.imageSmoothingQuality="high";x.drawImage(crop.img,g.x,g.y,g.w,g.h);
+  const d=out.toDataURL("image/jpeg",.85);crop=null;closeDatePicker();
+  S.profile=Object.assign({},S.profile,{photo:d});markState();render();toast("Profile photo updated",null);pushPhoto();
+},true);
 function removePhoto(){const p=Object.assign({},S.profile);delete p.photo;S.profile=p;markState();render();toast("Photo removed",null);pushPhoto()}
 /* Also show it on the leaderboard and in Admin (separate write so a missing rule can't block anything else). */
 async function pushPhoto(){
@@ -909,7 +939,7 @@ function drawDatePicker(){
     '<p class="sub dp-key"><span class="dot"></span> days you already logged</p>'+
     '<button type="button" class="btn ghost wide" data-dpclose="1">Cancel</button></div>';
 }
-function closeDatePicker(fromPop){const el=document.getElementById("dpick");if(el.hidden)return;if(fromPop!==true)navPopIf("ov","dpick");el.hidden=true;el.innerHTML="";dp=null}
+function closeDatePicker(fromPop){const el=document.getElementById("dpick");if(el.hidden)return;crop=null;if(fromPop!==true)navPopIf("ov","dpick");el.hidden=true;el.innerHTML="";dp=null}
 document.getElementById("dpick").addEventListener("click",e=>{
   const el=e.currentTarget;
   if(e.target===el||e.target.closest("[data-dpclose]")){closeDatePicker();return}

@@ -732,3 +732,19 @@ nav .fab-c{position:relative}
 [data-theme=chalk] .act-ach{color:#7A5200}
 .act-share{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border-radius:999px;background:var(--soft);color:var(--ink);font-weight:700;font-size:14px}
 .act-share svg{width:18px;height:18px}
+
+/* ---------- Editing saved workouts / sets ---------- */
+.done-ex .done-row{display:grid;grid-template-columns:minmax(0,1fr) auto 14px;align-items:center;gap:10px;width:100%;text-align:left;font-size:15px;border-bottom:1px solid var(--line);padding:10px 0;color:var(--ink);min-height:44px}
+.done-ex .done-row span:first-child{font-weight:600}
+.done-ex .done-row span.num{color:var(--mute);text-align:right}
+.done-ex .done-row i{font-style:normal;color:var(--mute);font-size:20px}
+.set .v{display:inline-flex;align-items:baseline;gap:4px;text-align:left;color:var(--ink);min-height:40px;padding:0;align-self:center;align-items:center}
+.set .v .pen{color:var(--mute);margin-left:6px;flex:none}
+.set.editing{background:var(--soft);border-radius:12px;box-shadow:inset 0 0 0 2px var(--accent);padding-left:6px;padding-right:6px}
+[data-theme=chalk] .set.editing{box-shadow:inset 0 0 0 2px var(--ink)}
+.act-a{gap:10px}
+.durrow label small{display:block;font-size:12px;color:var(--mute);font-weight:500;margin-top:2px}
+.durpick{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 4px}
+.dur-card .durrow{margin-top:10px}
+.stickybar{bottom:calc(104px + var(--safeB))}
+.toast{bottom:calc(108px + var(--safeB))}

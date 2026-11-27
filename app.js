@@ -56,7 +56,7 @@ function applyTheme(t){
 }
 const blank=()=>({workouts:[],active:null,custom:{},profile:{},pending:{up:{},del:{},state:0}});
 let S=blank();
-let logDate=null,pastMins=60,tab="home",period="week",pickPart=null,showAllParts=false,summary=null,openId=null,progEx=null,draft={w:"",r:""},msgText="",popSet=false;
+let editSet=null,logDate=null,pastMins=60,tab="home",period="week",pickPart=null,showAllParts=false,summary=null,openId=null,progEx=null,draft={w:"",r:""},msgText="",popSet=false;
 let authEmail="",authName="",pendingName="",authGender="",pendingGender="",ready=false,FB=null,fbAuth=null,fdb=null,user=null,authMode="signin",authMsg="",authBusy=false,syncState="idle",syncErr="",flushing=false,flushTimer=null,ver=1,bootError="";
 
 /* ---------- Local cache (per user) ---------- */
@@ -176,16 +176,17 @@ function viewWorkout(){
       '</div></section><section class="card"><h3>This week</h3><div class="tiles">'+tile("Workouts",ws.length)+tile("Volume",fmt(ws.reduce((a,w)=>a+volOf(w),0))+" kg")+'</div></section>';
   }
   if(A.cur!=null&&A.ex[A.cur]) return viewLogger(A);
-  setHead(long(A.date)+(A.past?" · past workout":""),A.parts.join(" + "));
+  setHead(A.edit?"Editing · "+long(A.date):long(A.date)+(A.past?" · past workout":""),A.parts.join(" + "));
   const part=pickPart&&A.parts.includes(pickPart)?pickPart:A.parts[A.parts.length-1];
   const doneNames=A.ex.filter(e=>e.sets.length).map(e=>e.name);
   const first=!A.ex.some(e=>e.sets.length);
   const todayK=dkey(new Date());
   let h='<section class="card datecard"><div class="daterow"><h3>Workout date</h3><button class="chip datepick on" data-act="pickdate" data-for="act" aria-haspopup="dialog" aria-label="Change workout date"><span>'+(A.date===todayK?"Today":esc(short(A.date)))+'</span></button></div>'+
-    (A.past?'<div class="durrow"><label for="actMinsIn">How long was it?</label><span><input type="number" id="actMinsIn" inputmode="numeric" min="5" max="300" step="5" value="'+(A.mins||60)+'"> min</span></div>':'')+'</section>';
+    (A.past?'<div class="durrow"><label for="actMinsIn">How long was it?</label><span><input type="number" id="actMinsIn" inputmode="numeric" min="5" max="300" step="5" value="'+(A.mins||60)+'"> min</span></div>'
+      :'<div class="durrow"><label for="actDurIn">Workout time<small>'+(A.manual?'Set by you':'Started '+new Date(A.start).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})+' · counting')+'</small></label><span><input type="number" id="actDurIn" inputmode="numeric" min="1" max="300" step="5" value="'+liveMins(A)+'"> min</span></div>')+'</section>';
   if(!first){
-    h+='<section class="card"><h3>Done so far</h3><div class="done-ex">'+A.ex.filter(e=>e.sets.length).map(e=>
-      '<div><span>'+esc(e.name)+'</span><span class="num">'+e.sets.map(s=>wl(s.w,1)+"×"+s.r).join(", ")+'</span></div>').join("")+'</div></section>';
+    h+='<section class="card"><h3>'+(A.edit?"Exercises in this workout":"Done so far")+'</h3>'+(A.edit?'<p class="sub">Tap an exercise to change, add or delete its sets.</p>':'')+'<div class="done-ex">'+A.ex.filter(e=>e.sets.length).map(e=>
+      '<button class="done-row" data-ex="'+esc(e.name)+'" data-part="'+esc(e.part)+'"><span>'+esc(e.name)+'</span><span class="num">'+e.sets.map(s=>wl(s.w,1)+"×"+s.r).join(", ")+'</span><i aria-hidden="true">›</i></button>').join("")+'</div></section>';
   }
   h+='<section class="card"><h2>'+(first?"Choose your first exercise":"Choose your next exercise")+'</h2><p class="sub">Tap one to start logging sets.</p>';
   h+='<div class="chips">'+A.parts.map(p=>'<button class="chip'+(p===part?" on":"")+'" data-pick="'+p+'">'+p+'</button>').join("")+
@@ -200,8 +201,8 @@ function viewWorkout(){
     return '<button class="ex'+(done?" done":"")+'" data-ex="'+esc(n)+'" data-part="'+part+'"><span class="thumb" aria-hidden="true">'+(exData(n)?'<img src="'+exData(n).img[0]+'" alt="" loading="lazy">':figSvg(n,part,false))+'</span><span class="exn"><b>'+esc(n)+'</b><small>'+hint+'</small></span><span class="go">›</span></button>';
   }).join("")+'</div>';
   h+='<form id="customForm" style="margin-top:12px" class="row"><input type="text" id="customName" maxlength="50" placeholder="Add your own '+part.toLowerCase()+' exercise" aria-label="Custom exercise name"><button class="btn ghost" type="submit" style="flex:0 0 auto">Add</button></form></section>';
-  h+='<div class="stickybar"><div class="row">'+(first?'':'<button class="btn" data-act="finish">Finish workout</button>')+
-     '<button class="btn ghost" data-act="discard">Discard workout</button></div></div>';
+  h+='<div class="stickybar"><div class="row">'+(first?'':'<button class="btn" data-act="finish">'+(A.edit?"Save changes":"Finish workout")+'</button>')+
+     '<button class="btn ghost" data-act="discard">'+(A.edit?"Cancel editing":"Discard workout")+'</button></div></div>';
   return h;
 }
 function lastTrained(p){
@@ -222,12 +223,15 @@ function viewLogger(A){
   h+='<div class="last">'+(l?'<b>Last time, '+short(l.date)+':</b> <span class="num">'+l.sets.map(s=>wl(s.w,1)+"×"+s.r).join(" · ")+'</span>':'No previous sessions. Start with a weight you can do with good form.')+'</div>';
   h+='<div class="sets">'+E.sets.map((s,i)=>{
     const isPR=prev>0&&s.w>prev&&E.sets.findIndex(x=>x.w===s.w)===i&&Math.max(...E.sets.slice(0,i).map(x=>x.w),0)<s.w;
-    return '<div class="set'+(popSet&&i===E.sets.length-1?" new":"")+'"><span class="n">'+(i+1)+'</span><span class="v">'+(s.w?kg(s.w)+' <small>kg</small>':'<small>Bodyweight</small>')+' × '+s.r+' <small>reps</small></span>'+
+    return '<div class="set'+(popSet&&i===E.sets.length-1?" new":"")+(editSet===i?" editing":"")+'"><span class="n">'+(i+1)+'</span><button class="v" data-editset="'+i+'" aria-label="Edit set '+(i+1)+'">'+(s.w?kg(s.w)+' <small>kg</small>':'<small>Bodyweight</small>')+' × '+s.r+' <small>reps</small><svg class="pen" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button>'+
       (isPR?'<span class="pr">PR</span>':'<span></span>')+'<button class="x" data-delset="'+i+'" aria-label="Delete set '+(i+1)+'">×</button></div>'}).join("")+'</div>';
   h+='<div class="steppers">'+stepper("w","Weight (kg)",2.5)+stepper("r","Reps",1)+'</div>';
-  h+='<button class="btn wide log" data-act="logset">Log set '+(E.sets.length+1)+'</button><p class="msg" id="msg">'+esc(msgText)+'</p></section>';
+  if(editSet!=null&&!E.sets[editSet])editSet=null;
+  h+=editSet!=null?'<button class="btn wide log" data-act="logset">Update set '+(editSet+1)+'</button><button class="link" data-act="canceledit" style="display:block;margin:8px auto 0">Cancel editing set</button>'
+    :'<button class="btn wide log" data-act="logset">Log set '+(E.sets.length+1)+'</button>';
+  h+='<p class="msg" id="msg">'+esc(msgText)+'</p></section>';
   h+='<div class="row" style="margin-bottom:8px"><button class="btn blue" data-act="doneex"'+(E.sets.length?'':' disabled')+'>Done, next exercise</button>'+
-     '<button class="btn ghost" data-act="'+(E.sets.length?"finish":"backex")+'">'+(E.sets.length?"Finish workout":"Pick a different one")+'</button></div>';
+     '<button class="btn ghost" data-act="'+(E.sets.length?"finish":"backex")+'">'+(E.sets.length?(A.edit?"Save changes":"Finish workout"):"Pick a different one")+'</button></div>';
   popSet=false;
   return h;
 }
@@ -515,7 +519,7 @@ function viewHome(){
     const nTro=TROPHIES.filter(t=>earned[t.id]===w.date).length,ach=[prs.length?pl(prs.length,"PR"):"",nTro?nTro+(nTro===1?" trophy":" trophies"):""].filter(Boolean).join(" · ");
     const shareRow='<div class="act-f"><span class="act-ach">'+(ach?'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+TI.star+'</svg>'+ach:'')+'</span><button class="act-share" data-sharew="'+w.id+'" aria-label="Share this workout">'+SHARE_ICON+'Share</button></div>';
     if(w.photo||open)h+='<div class="act-ph" data-phw="'+w.id+'" data-mode="'+(open?"feed":"feed-ro")+'">'+photoSlot(w.id,open?"feed":"feed-ro")+'</div>';
-    if(open)h+='<div class="row act-a"><button class="btn ghost" data-delw="'+w.id+'">Delete workout</button></div>';
+    if(open)h+='<div class="row act-a"><button class="btn" data-editw="'+w.id+'">Edit workout</button><button class="btn ghost" data-delw="'+w.id+'">Delete</button></div>';
     h+=shareRow;
     h+='</section>';
   }
@@ -817,16 +821,24 @@ addEventListener("popstate",e=>{
 });
 function goBack(){const s=navState();if(!s.root&&s.tab===tab)NAV.back();else go("home")}
 function go(t,noPush){if(!noPush&&t!==tab)try{NAV.pushState({tab:t},"")}catch(e){}tab=t;render();window.scrollTo(0,0);app.classList.remove("enter");void app.offsetWidth;app.classList.add("enter");clearTimeout(go.t);go.t=setTimeout(()=>app.classList.remove("enter"),700)}
+const liveMins=A=>A.manual?A.mins:Math.max(1,Math.round((Date.now()-A.start)/60000));
 function startWorkout(p){
   const today=dkey(new Date()),past=logDate&&logDate<today?logDate:null;
   S.active=past?{id:uid(),date:past,start:parse(past).setHours(18,0,0,0),past:true,mins:Math.max(5,Math.min(300,pastMins||60)),parts:[p],ex:[],cur:null}
     :{id:uid(),date:today,start:Date.now(),parts:[p],ex:[],cur:null};
   logDate=null;pickPart=p;showAllParts=false;markState();render();window.scrollTo(0,0);
 }
+function editWorkout(wid){
+  const w=S.workouts.find(x=>x.id===wid);if(!w)return;
+  if(S.active){toast(S.active.edit?"You’re already editing a workout.":"Finish or discard your current workout first.",null);go("workout");return}
+  const mins=w.start&&w.end&&w.end>w.start?Math.round((w.end-w.start)/60000):60;
+  S.active={id:w.id,edit:w.id,date:w.date,start:w.start||parse(w.date).setHours(18,0,0,0),past:true,mins:Math.max(5,Math.min(300,mins)),parts:w.parts.slice(),ex:JSON.parse(JSON.stringify(w.ex)),cur:null};
+  pickPart=w.parts[0];showAllParts=false;editSet=null;markState();go("workout");window.scrollTo(0,0);
+}
 function openEx(name,part){
   const A=S.active;let i=A.ex.findIndex(e=>e.name===name);
   if(i<0){A.ex.push({name,part,sets:[]});i=A.ex.length-1}
-  A.cur=i;draft={w:"",r:""};navPush({ex:1});markState();render();window.scrollTo(0,0);
+  A.cur=i;draft={w:"",r:""};editSet=null;navPush({ex:1});markState();render();window.scrollTo(0,0);
 }
 function cleanActive(){const A=S.active;A.ex=A.ex.filter(e=>e.sets.length);A.cur=null}
 /* ---------- Auto-fit: shrink labels and numbers until they fit on one line ---------- */
@@ -849,10 +861,31 @@ function photoHtml(name,part,big){
   return '<span class="ph'+(big?" big":"")+'"><img src="'+d.img[0]+'" alt="'+esc(name)+', start position"'+(big?'':' loading="lazy"')+'><img class="ph-b" src="'+d.img[1]+'" alt="'+esc(name)+', end position"'+(big?'':' loading="lazy"')+'></span>';
 }
 
+/* ---------- "How long was your workout?" — shown before saving when everything was logged in a few minutes ---------- */
+let finishConfirmed=false;
+function askDuration(el){
+  const box=document.getElementById("dpick");dp=null;
+  box.innerHTML='<div class="dp-card dur-card" role="dialog" aria-modal="true" aria-label="Workout time"><h3>How long did you train?</h3><p class="sub">You logged everything in '+pl(el,"minute")+'. If you added your sets after the gym, set your real workout time so your stats stay right.</p>'+
+    '<div class="durpick">'+[30,45,60,75,90].map(m=>'<button type="button" class="chip" data-durq="'+m+'">'+m+' min</button>').join("")+'</div>'+
+    '<div class="durrow"><label for="durSheetIn">Or type it</label><span><input type="number" id="durSheetIn" inputmode="numeric" min="1" max="300" step="5" value="60"> min</span></div>'+
+    '<button type="button" class="btn wide" data-durok="1" style="margin-top:12px">Save workout</button>'+
+    '<button type="button" class="link" data-durkeep="1" style="display:block;margin:10px auto 0">It really was '+pl(el,"minute")+'</button></div>';
+  box.hidden=false;navPush({ov:"dpick"});
+}
+document.getElementById("dpick").addEventListener("click",e=>{
+  const q=e.target.closest("[data-durq]");if(q){document.getElementById("durSheetIn").value=q.dataset.durq;document.querySelectorAll("[data-durq]").forEach(x=>x.classList.toggle("on",x===q));return}
+  const ok=e.target.closest("[data-durok]"),keep=e.target.closest("[data-durkeep]");if(!ok&&!keep)return;
+  e.stopImmediatePropagation();
+  const A=S.active;if(!A)return;
+  if(ok){const n=parseInt(document.getElementById("durSheetIn").value,10);if(n>0){A.mins=Math.max(1,Math.min(300,n));A.manual=true}}
+  navReplace({tab});closeDatePicker(true);finishConfirmed=true;finish();
+},true);
+
 /* ---------- Date picker (in-app, same on every phone and laptop) ---------- */
 let dp=null;
 function setActDate(v){
   const today=dkey(new Date()),A=S.active;if(!A||!/^\d{4}-\d{2}-\d{2}$/.test(v)||v>today)return;
+  if(A.edit){const t=new Date(A.start||Date.now()),d=parse(v);d.setHours(t.getHours(),t.getMinutes(),0,0);A.date=v;A.start=+d;markState();return}
   if(v===today){if(A.past){A.past=false;delete A.mins;A.start=Date.now()}A.date=today}
   else{A.date=v;A.past=true;A.mins=A.mins||60;A.start=parse(v).setHours(18,0,0,0)}
   markState();
@@ -1187,10 +1220,22 @@ document.getElementById("share").addEventListener("click",e=>{
 
 function finish(){
   const A=S.active;cleanActive();
+  if(A.edit){
+    if(!A.ex.length){toast("Add at least one set, or delete the workout from Home.",null);render();return}
+    const old=S.workouts.find(x=>x.id===A.edit);
+    const w={id:A.edit,date:A.date,start:A.start,end:A.start+(A.mins||60)*60000,parts:A.parts.filter(p=>A.ex.some(e=>e.part===p)),ex:A.ex,photo:!!(old&&old.photo)};
+    if(!w.parts.length)w.parts=A.parts;
+    S.workouts=S.workouts.filter(x=>x.id!==A.edit).concat([w]);S.active=null;editSet=null;markUp(w.id);markState();
+    openId=w.id;navReplace({tab:"home"});go("home",true);window.scrollTo(0,0);toast("Workout updated",null);return;
+  }
   if(!A.ex.length){S.active=null;markState();render();return}
+  if(!A.past&&!A.manual&&!finishConfirmed){const el=Math.round((Date.now()-A.start)/60000),n=A.ex.reduce((a,e)=>a+e.sets.length,0);
+    if(el<10&&n>=4){askDuration(Math.max(1,el));return}}
+  finishConfirmed=false;
+  if(!A.past&&A.manual){const end=Date.now();A.start=end-A.mins*60000;A.end=end}
   let prs=0;const prList=[];
   for(const e of A.ex){const b=bestW(e.name,A.id);if(b>0&&Math.max(...e.sets.map(s=>s.w))>b){prs++;prList.push(e.name)}}
-  const w={id:A.id,date:A.date,start:A.start,end:A.past?A.start+A.mins*60000:Date.now(),parts:A.parts.filter(p=>A.ex.some(e=>e.part===p)),ex:A.ex};
+  const w={id:A.id,date:A.date,start:A.start,end:A.past?A.start+A.mins*60000:(A.end||Date.now()),parts:A.parts.filter(p=>A.ex.some(e=>e.part===p)),ex:A.ex};
   if(!w.parts.length)w.parts=A.parts;
   const troBefore=trophyState().earned;
   S.workouts.push(w);S.active=null;
@@ -1219,7 +1264,9 @@ app.addEventListener("click",e=>{
   if(d.addpart){A.parts.push(d.addpart);pickPart=d.addpart;showAllParts=false;markState();render();return}
   if(d.ex){openEx(d.ex,d.part);return}
   if(d.step){const k=d.step,v=parseFloat(String(draft[k]).replace(",","."))||0,n=Math.max(0,Math.round((v+parseFloat(d.d))*100)/100);draft[k]=k==="r"?String(Math.round(n)):kg(n);render();return}
-  if(d.delset!=null){A.ex[A.cur].sets.splice(+d.delset,1);markState();render();return}
+  if(d.delset!=null){A.ex[A.cur].sets.splice(+d.delset,1);editSet=null;markState();render();return}
+  if(d.editset!=null){const st=A.ex[A.cur].sets[+d.editset];if(st){editSet=+d.editset;draft={w:kg(st.w),r:String(st.r)};msgText="";render();const el=document.querySelector(".steppers");if(el)el.scrollIntoView({block:"center",behavior:"smooth"})}return}
+  if(d.editw){editWorkout(d.editw);return}
   if(d.period){period=d.period;render();return}
   if(d.open){openId=openId===d.open?null:d.open;render();return}
   if(d.gender){const first=!gender();S.profile=Object.assign({},S.profile,{gender:d.gender});markState();render();if(first&&tab==="workout")toast("Thanks! Your exercises are set up.",null);return}
@@ -1233,12 +1280,14 @@ app.addEventListener("click",e=>{
     case"logset":{
       const w=parseFloat(String(draft.w).replace(",",".")),r=parseInt(draft.r,10);
       if(!(w>=0)||!(r>0)){msgText="Enter a weight (0 for bodyweight) and at least 1 rep.";render();return}
+      if(editSet!=null&&A.ex[A.cur].sets[editSet]){A.ex[A.cur].sets[editSet]={w:Math.round(w*100)/100,r};editSet=null;msgText="";const E2=A.ex[A.cur],ls=E2.sets[E2.sets.length-1];draft={w:kg(ls.w),r:String(ls.r)};markState();render();toast("Set updated",null);break}
       A.ex[A.cur].sets.push({w:Math.round(w*100)/100,r});popSet=true;markState();render();break}
+    case"canceledit":{editSet=null;const E2=A.ex[A.cur],ls=E2.sets[E2.sets.length-1];draft=ls?{w:kg(ls.w),r:String(ls.r)}:{w:"",r:""};render();break}
     case"doneex":cleanActive();draft={w:"",r:""};markState();render();window.scrollTo(0,0);navPopIf("ex",1);break;
     case"backex":cleanActive();markState();render();navPopIf("ex",1);break;
     case"finish":finish();break;
     case"toggleParts":showAllParts=!showAllParts;render();break;
-    case"discard":{const prev=S.active;S.active=null;pickPart=null;markState();render();window.scrollTo(0,0);
+    case"discard":{const prev=S.active;if(prev&&prev.edit){S.active=null;editSet=null;markState();navReplace({tab:"home"});go("home",true);toast("No changes saved",null);break}S.active=null;pickPart=null;markState();render();window.scrollTo(0,0);
       toast("Workout discarded",()=>{if(!S.active){S.active=prev;markState();render()}});break}
     case"syncnow":setSync("saving");syncNow();break;
     case"signout":signOut();break;
@@ -1267,6 +1316,7 @@ app.addEventListener("change",async e=>{
   if(e.target.id==="photoIn"){const f=e.target.files&&e.target.files[0];e.target.value="";if(f)setPhoto(f);return}
   if(e.target.id==="exSel"){progEx=e.target.value;render();return}
 
+  if(e.target.id==="actDurIn"&&S.active){const n=parseInt(e.target.value,10);if(n>0){S.active.mins=Math.max(1,Math.min(300,n));S.active.manual=true}else{delete S.active.manual}markState();render();return}
   if(e.target.id==="actMinsIn"&&S.active){const n=parseInt(e.target.value,10);S.active.mins=n>0?Math.max(5,Math.min(300,n)):60;markState();return}
   if(e.target.id==="pastMinsIn"){const n=parseInt(e.target.value,10);pastMins=n>0?Math.max(5,Math.min(300,n)):60;return}
 });

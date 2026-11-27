@@ -424,15 +424,13 @@ function viewAccount(){
   if(isGuest())return viewGuestAccount();
   setHead("Account",user.name||"Your account");
   const pv=user.providers||[],pw=pv.includes("password");
-  const via=pw?"Email and password":pv.includes("google.com")?"Google":pv.includes("phone")?"Phone number":"Email and password";
   const phone=acctDraft?acctDraft.ph:(S.profile&&S.profile.phone)||user.phone||"";
   const nmv=acctDraft?acctDraft.nm:user.name||"";
   let h='<section class="card"><h3>Profile</h3><form id="profileForm">'+
     '<label class="fl" for="nm">Name</label><input type="text" id="nm" maxlength="40" autocomplete="name" placeholder="Your name" value="'+esc(nmv)+'">'+
     '<label class="fl" for="ph">Phone number</label><input type="tel" id="ph" maxlength="20" autocomplete="tel" inputmode="tel" placeholder="e.g. 98765 43210" value="'+esc(phone)+'">'+
     '<button class="btn wide" type="submit" style="margin-top:14px">Save</button></form><p class="msg">'+esc(acctMsg.name||"")+'</p>'+
-    '<dl class="facts"><div><dt>Signed in with</dt><dd>'+via+'</dd></div>'+
-    (user.email?'<div><dt>Email</dt><dd>'+esc(user.email)+'</dd></div>':'')+'</dl></section>';
+    (user.email?'<dl class="facts"><div><dt>Email</dt><dd>'+esc(user.email)+'</dd></div></dl>':'')+'</section>';
   const ct=curTheme();
   h+='<section class="card"><h3>Theme</h3><div class="themes" role="radiogroup" aria-label="App theme">'+THEMES.map(t=>
     '<button class="theme" role="radio" aria-checked="'+(t.id===ct)+'" data-themepick="'+t.id+'"><span class="sw" style="background:'+t.bg+';color:'+t.fg+';font:'+t.font+'">Aa</span>'+

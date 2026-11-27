@@ -168,7 +168,7 @@ function viewWorkout(){
     const dateCard='<section class="card datecard"><h3>Workout date</h3><div class="chips" role="radiogroup" aria-label="Workout date">'+
       '<button class="chip'+(!ld?" on":"")+'" role="radio" aria-checked="'+!ld+'" data-logdate="today">Today</button>'+
       '<button class="chip'+(ld===yest?" on":"")+'" role="radio" aria-checked="'+(ld===yest)+'" data-logdate="'+yest+'">Yesterday</button>'+
-      '<label class="chip datepick'+(ld&&ld!==yest?" on":"")+'"><span>'+(ld&&ld!==yest?esc(short(ld)):"Earlier date")+'</span><input type="date" id="logDateIn" max="'+yest+'" min="2015-01-01" value="'+(ld||"")+'" aria-label="Pick an earlier date"></label></div>'+
+      '<button class="chip datepick'+(ld&&ld!==yest?" on":"")+'" data-act="pickdate" data-for="log" aria-haspopup="dialog"><span>'+(ld&&ld!==yest?esc(short(ld)):"Earlier date")+'</span></button></div>'+
       (ld?'<p class="pastnote">Logging for <b>'+esc(long(ld))+'</b>.</p><div class="durrow"><label for="pastMinsIn">How long was it?</label><span><input type="number" id="pastMinsIn" inputmode="numeric" min="5" max="300" step="5" value="'+pastMins+'"> min</span></div>':'')+'</section>';
     return (gender()?'':genderCard())+(user.name||isGuest()?'':nameCard(true))+dateCard+'<section class="card"><h2>Pick a body part</h2><p class="sub">You can add more body parts once you’ve started.</p><div class="parts">'+
       partsOrder().map(p=>'<button class="part" data-start="'+p+'"><b>'+p+'</b><small>'+lastTrained(p)+'</small></button>').join("")+
@@ -180,8 +180,7 @@ function viewWorkout(){
   const doneNames=A.ex.filter(e=>e.sets.length).map(e=>e.name);
   const first=!A.ex.some(e=>e.sets.length);
   const todayK=dkey(new Date());
-  let h='<section class="card datecard"><div class="daterow"><h3>Workout date</h3><label class="chip datepick on"><span>'+(A.date===todayK?"Today":esc(short(A.date)))+'</span>'+
-    '<input type="date" id="actDateIn" max="'+todayK+'" min="2015-01-01" value="'+A.date+'" aria-label="Change workout date"></label></div>'+
+  let h='<section class="card datecard"><div class="daterow"><h3>Workout date</h3><button class="chip datepick on" data-act="pickdate" data-for="act" aria-haspopup="dialog" aria-label="Change workout date"><span>'+(A.date===todayK?"Today":esc(short(A.date)))+'</span></button></div>'+
     (A.past?'<div class="durrow"><label for="actMinsIn">How long was it?</label><span><input type="number" id="actMinsIn" inputmode="numeric" min="5" max="300" step="5" value="'+(A.mins||60)+'"> min</span></div>':'')+'</section>';
   if(!first){
     h+='<section class="card"><h3>Done so far</h3><div class="done-ex">'+A.ex.filter(e=>e.sets.length).map(e=>
@@ -628,6 +627,7 @@ addEventListener("popstate",e=>{
   if(skipPop){skipPop--;return}
   const st=e.state||{},sh=document.getElementById("share"),z=document.getElementById("zoom"),ce=document.getElementById("cele");
   if(!sh.hidden){sh.hidden=true;return}
+  if(!document.getElementById("dpick").hidden){closeDatePicker(true);return}
   if(!z.hidden){closeZoom(true);return}
   if(!drawer.hidden){closeDrawer(true);return}
   if(!ce.hidden){closeCele(true);return}
@@ -672,6 +672,44 @@ function photoHtml(name,part,big){
   return '<span class="ph'+(big?" big":"")+'"><img src="'+d.img[0]+'" alt="'+esc(name)+', start position"'+(big?'':' loading="lazy"')+'><img class="ph-b" src="'+d.img[1]+'" alt="'+esc(name)+', end position"'+(big?'':' loading="lazy"')+'></span>';
 }
 
+/* ---------- Date picker (in-app, same on every phone and laptop) ---------- */
+let dp=null;
+function setActDate(v){
+  const today=dkey(new Date()),A=S.active;if(!A||!/^\d{4}-\d{2}-\d{2}$/.test(v)||v>today)return;
+  if(v===today){if(A.past){A.past=false;delete A.mins;A.start=Date.now()}A.date=today}
+  else{A.date=v;A.past=true;A.mins=A.mins||60;A.start=parse(v).setHours(18,0,0,0)}
+  markState();
+}
+function openDatePicker(forWhat){
+  const today=dkey(new Date()),y=new Date();y.setDate(y.getDate()-1);
+  const max=forWhat==="log"?dkey(y):today,sel=forWhat==="log"?(logDate||""):(S.active&&S.active.date||today);
+  dp={for:forWhat,max,sel,ym:(sel||max).slice(0,7)};
+  document.getElementById("dpick").hidden=false;navPush({ov:"dpick"});drawDatePicker();
+}
+function drawDatePicker(){
+  const el=document.getElementById("dpick");if(!dp)return;
+  const[y,m]=dp.ym.split("-").map(Number),lead=(new Date(y,m-1,1).getDay()+6)%7,n=new Date(y,m,0).getDate(),t=trainedDays(),today=dkey(new Date());
+  const maxYm=dp.max.slice(0,7),minYm="2015-01";
+  let g='';for(let i=0;i<lead;i++)g+='<span class="pad"></span>';
+  for(let d=1;d<=n;d++){const k=dp.ym+"-"+pad(d),dis=k>dp.max;
+    g+='<button type="button" class="'+[t.has(k)?"has":"",k===dp.sel?"sel":"",k===today?"today":""].join(" ").trim()+'"'+(dis?' disabled':' data-dpday="'+k+'"')+' aria-label="'+esc(long(k))+(t.has(k)?", has a workout":"")+'">'+d+'</button>'}
+  el.innerHTML='<div class="dp-card" role="dialog" aria-modal="true" aria-label="Pick the workout date"><h3>'+(dp.for==="log"?"Which day did you train?":"Change workout date")+'</h3>'+
+    '<div class="calnav"><button type="button" data-dpm="-1" aria-label="Previous month"'+(dp.ym<=minYm?" disabled":"")+'>‹</button><b>'+esc(monthName(dp.ym))+'</b><button type="button" data-dpm="1" aria-label="Next month"'+(dp.ym>=maxYm?" disabled":"")+'>›</button></div>'+
+    '<div class="cal dp">'+["M","T","W","T","F","S","S"].map(l=>'<b aria-hidden="true">'+l+'</b>').join("")+g+'</div>'+
+    '<p class="sub dp-key"><span class="dot"></span> days you already logged</p>'+
+    '<button type="button" class="btn ghost wide" data-dpclose="1">Cancel</button></div>';
+}
+function closeDatePicker(fromPop){const el=document.getElementById("dpick");if(el.hidden)return;if(fromPop!==true)navPopIf("ov","dpick");el.hidden=true;el.innerHTML="";dp=null}
+document.getElementById("dpick").addEventListener("click",e=>{
+  const el=e.currentTarget;
+  if(e.target===el||e.target.closest("[data-dpclose]")){closeDatePicker();return}
+  const mb=e.target.closest("[data-dpm]");if(mb&&!mb.disabled){const[y,m]=dp.ym.split("-").map(Number),nd=new Date(y,m-1+(+mb.dataset.dpm),1);dp.ym=nd.getFullYear()+"-"+pad(nd.getMonth()+1);drawDatePicker();return}
+  const db=e.target.closest("[data-dpday]");if(!db)return;
+  const k=db.dataset.dpday,f=dp.for;closeDatePicker();
+  if(f==="log"){logDate=k;msgText=""}else setActDate(k);
+  render();
+});
+
 /* ---------- How-to zoom ---------- */
 function openZoom(name,part){
   const z=document.getElementById("zoom"),mus=figMuscles(name,part),L=figMuscleLabel;
@@ -693,7 +731,7 @@ document.getElementById("zoom").addEventListener("click",e=>{
   z.querySelectorAll("[data-zpos]").forEach(b=>b.classList.toggle("on",b===p));
   ph.classList.remove("show0","show1");if(p.dataset.zpos!=="play")ph.classList.add("show"+p.dataset.zpos);
 });
-document.addEventListener("keydown",e=>{if(e.key==="Escape")closeZoom()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeDatePicker();closeZoom()}});
 
 /* ---------- Workout-complete celebration ---------- */
 let celeData=null,celeRun=0,celeRaf=0;
@@ -924,6 +962,7 @@ app.addEventListener("click",e=>{
     case"shareinvite":shareInvite();break;
     case"lbjoin":lbJoin();break;
     case"lbleave":lbLeave();break;
+    case"pickdate":openDatePicker(b.dataset.for);break;
     case"sharerecap":{const sp=recapSpec(period);if(!sp.count){toast("Log a workout "+(period==="week"?"this week":"this month")+" first",null);break}openShare(sp);break}
     case"guesttry":enterGuest();break;
     case"guestsignup":navPush({auth:"open"});authOpen=true;authMode="signup";authMsg="";render();window.scrollTo(0,0);break;
@@ -943,13 +982,7 @@ app.addEventListener("click",e=>{
 app.addEventListener("input",e=>{const k=e.target.dataset&&e.target.dataset.draft;if(k)draft[k]=e.target.value});
 app.addEventListener("change",async e=>{
   if(e.target.id==="exSel"){progEx=e.target.value;render();return}
-  if(e.target.id==="logDateIn"){const v=e.target.value,today=dkey(new Date());if(/^\d{4}-\d{2}-\d{2}$/.test(v)&&v<today){logDate=v}else if(v>=today){logDate=null;msgText=""}render();return}
-  if(e.target.id==="actDateIn"&&S.active){
-    const v=e.target.value,today=dkey(new Date()),A=S.active;
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(v)||v>today){render();return}
-    if(v===today){if(A.past){A.past=false;delete A.mins;A.start=Date.now()}A.date=today}
-    else{A.date=v;A.past=true;A.mins=A.mins||60;A.start=parse(v).setHours(18,0,0,0)}
-    markState();render();return}
+
   if(e.target.id==="actMinsIn"&&S.active){const n=parseInt(e.target.value,10);S.active.mins=n>0?Math.max(5,Math.min(300,n)):60;markState();return}
   if(e.target.id==="pastMinsIn"){const n=parseInt(e.target.value,10);pastMins=n>0?Math.max(5,Math.min(300,n)):60;return}
 });

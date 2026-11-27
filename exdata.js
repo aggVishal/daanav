@@ -1,6 +1,137 @@
 /* Exercise photos and step-by-step instructions.
    Source: free-exercise-db by yuhonas (github.com/yuhonas/free-exercise-db), released into the public domain under the Unlicense. */
 window.EXDATA={
+"Glute bridge": {
+"img": [
+"img/ex/glute-bridge-0.webp",
+"img/ex/glute-bridge-1.webp"
+],
+"steps": [
+"Begin seated on the ground with a loaded barbell over your legs. Using a fat bar or having a pad on the bar can greatly reduce the discomfort caused by this exercise. Roll the bar so that it is directly above your hips, and lay down flat on the floor.",
+"Begin the movement by driving through with your heels, extending your hips vertically through the bar. Your weight should be supported by your upper back and the heels of your feet.",
+"Extend as far as possible, then reverse the motion to return to the starting position."
+],
+"src": "Barbell_Glute_Bridge"
+},
+"Single-leg glute bridge": {
+"img": [
+"img/ex/single-leg-glute-bridge-0.webp",
+"img/ex/single-leg-glute-bridge-1.webp"
+],
+"steps": [
+"Lay on the floor with your feet flat and knees bent.",
+"Raise one leg off of the ground, pulling the knee to your chest. This will be your starting position.",
+"Execute the movement by driving through the heel, extending your hip upward and raising your glutes off of the ground.",
+"Extend as far as possible, pause and then return to the starting position."
+],
+"src": "Single_Leg_Glute_Bridge"
+},
+"Cable kickback": {
+"img": [
+"img/ex/cable-kickback-0.webp",
+"img/ex/cable-kickback-1.webp"
+],
+"steps": [
+"Hook a leather ankle cuff to a low cable pulley and then attach the cuff to your ankle.",
+"Face the weight stack from a distance of about two feet, grasping the steel frame for support.",
+"While keeping your knees and hips bent slightly and your abs tight, contract your glutes to slowly \"kick\" the working leg back in a semicircular arc as high as it will comfortably go as you breathe out. Tip: At full extension, squeeze your glutes for a second in order to achieve a peak contraction.",
+"Now slowly bring your working leg forward, resisting the pull of the cable until you reach the starting position.",
+"Repeat for the recommended amount of repetitions.",
+"Switch legs and repeat the movement for the other side."
+],
+"src": "One-Legged_Cable_Kickback"
+},
+"Glute kickback": {
+"img": [
+"img/ex/glute-kickback-0.webp",
+"img/ex/glute-kickback-1.webp"
+],
+"steps": [
+"Kneel on the floor or an exercise mat and bend at the waist with your arms extended in front of you (perpendicular to the torso) in order to get into a kneeling push-up position but with the arms spaced at shoulder width. Your head should be looking forward and the bend of the knees should create a 90-degree angle between the hamstrings and the calves. This will be your starting position.",
+"As you exhale, lift up your right leg until the hamstrings are in line with the back while maintaining the 90-degree angle bend. Contract the glutes throughout this movement and hold the contraction at the top for a second. Tip: At the end of the movement the upper leg should be parallel to the floor while the calf should be perpendicular to it.",
+"Go back to the initial position as you inhale and now repeat with the left leg.",
+"Continue to alternate legs until all of the recommended repetitions have been performed."
+],
+"src": "Glute_Kickback"
+},
+"Sumo squat": {
+"img": [
+"img/ex/sumo-squat-0.webp",
+"img/ex/sumo-squat-1.webp"
+],
+"steps": [
+"Hold a dumbbell at the base with both hands and stand straight up. Move your legs so that they are wider than shoulder width apart from each other with your knees slightly bent.",
+"Your toes should be facing out. Note: Your arms should be stationary while performing the exercise. This is the starting position.",
+"Slowly bend the knees and lower your legs until your thighs are parallel to the floor. Make sure to inhale as this is the eccentric part of the exercise.",
+"Press mainly with the heel of the foot to bring the body back to the starting position while exhaling.",
+"Repeat for the recommended amount of repetitions."
+],
+"src": "Plie_Dumbbell_Squat"
+},
+"Step-ups": {
+"img": [
+"img/ex/step-ups-0.webp",
+"img/ex/step-ups-1.webp"
+],
+"steps": [
+"Stand up straight while holding a dumbbell on each hand (palms facing the side of your legs).",
+"Place the right foot on the elevated platform. Step on the platform by extending the hip and the knee of your right leg. Use the heel mainly to lift the rest of your body up and place the foot of the left leg on the platform as well. Breathe out as you execute the force required to come up.",
+"Step down with the left leg by flexing the hip and knee of the right leg as you inhale. Return to the original standing position by placing the right foot of to next to the left foot on the initial position.",
+"Repeat with the right leg for the recommended amount of repetitions and then perform with the left leg."
+],
+"src": "Dumbbell_Step_Ups"
+},
+"Hip abduction (machine)": {
+"img": [
+"img/ex/hip-abduction-machine-0.webp",
+"img/ex/hip-abduction-machine-1.webp"
+],
+"steps": [
+"To begin, sit down on the abductor machine and select a weight you are comfortable with. When your legs are positioned properly, grip the handles on each side. Your entire upper body (from the waist up) should be stationary. This is the starting position.",
+"Slowly press against the machine with your legs to move them away from each other while exhaling.",
+"Feel the contraction for a second and begin to move your legs back to the starting position while breathing in. Note: Remember to keep your upper body stationary to prevent any injuries from occurring.",
+"Repeat for the recommended amount of repetitions."
+],
+"src": "Thigh_Abductor"
+},
+"Hip adduction (machine)": {
+"img": [
+"img/ex/hip-adduction-machine-0.webp",
+"img/ex/hip-adduction-machine-1.webp"
+],
+"steps": [
+"To begin, sit down on the adductor machine and select a weight you are comfortable with. When your legs are positioned properly on the leg pads of the machine, grip the handles on each side. Your entire upper body (from the waist up) should be stationary. This is the starting position.",
+"Slowly press against the machine with your legs to move them towards each other while exhaling.",
+"Feel the contraction for a second and begin to move your legs back to the starting position while breathing in. Note: Remember to keep your upper body stationary and avoid fast jerking motions in order to prevent any injuries from occurring.",
+"Repeat for the recommended amount of repetitions."
+],
+"src": "Thigh_Adductor"
+},
+"Goblet squat": {
+"img": [
+"img/ex/goblet-squat-0.webp",
+"img/ex/goblet-squat-1.webp"
+],
+"steps": [
+"Stand holding a light kettlebell by the horns close to your chest. This will be your starting position.",
+"Squat down between your legs until your hamstrings are on your calves. Keep your chest and head up and your back straight.",
+"At the bottom position, pause and use your elbows to push your knees out. Return to the starting position, and repeat for 10-20 repetitions."
+],
+"src": "Goblet_Squat"
+},
+"Assisted pull-ups": {
+"img": [
+"img/ex/assisted-pull-ups-0.webp",
+"img/ex/assisted-pull-ups-1.webp"
+],
+"steps": [
+"Choke the band around the center of the pullup bar. You can use different bands to provide varying levels of assistance.",
+"Pull the end of the band down, and place one bent knee into the loop, ensuring it won't slip out. Take a medium to wide grip on the bar. This will be your starting position.",
+"Pull yourself upward by contracting the lats as you flex the elbow. The elbow should be driven to your side. Pull to the front, attempting to get your chin over the bar. Avoid swinging or jerking movements.",
+"After a brief pause, return to the starting position."
+],
+"src": "Band_Assisted_Pull-Up"
+},
 "Bench press": {
 "img": [
 "img/ex/bench-press-0.webp",

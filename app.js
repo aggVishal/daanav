@@ -12,9 +12,18 @@ const LIB={
   Legs:["Squat","Leg press","Romanian deadlift","Walking lunges","Bulgarian split squat","Leg extension","Leg curl","Hip thrust","Calf raise"],
   Biceps:["Barbell curl","Dumbbell curl","Hammer curl","Preacher curl","Cable curl","Incline dumbbell curl"],
   Triceps:["Tricep pushdown","Overhead tricep extension","Skull crushers","Close-grip bench press","Tricep dips"],
-  Core:["Hanging leg raise","Cable crunch","Ab wheel rollout","Russian twist","Crunches"]
+  Core:["Hanging leg raise","Cable crunch","Ab wheel rollout","Russian twist","Crunches"],
+  Glutes:["Hip thrust","Glute bridge","Single-leg glute bridge","Cable kickback","Glute kickback","Sumo squat","Step-ups","Hip abduction (machine)","Hip adduction (machine)"]
 };
+LIB.Legs.splice(3,0,"Goblet squat");LIB.Back.splice(3,0,"Assisted pull-ups");
 const PARTS=Object.keys(LIB);
+/* Gender: "f" female, "m" male, "x" prefer not to say. Used only to order body parts and exercises. */
+const G_OPTS=[["f","Female"],["m","Male"],["x","Prefer not to say"]];
+const gender=()=>(S&&S.profile&&S.profile.gender)||"";
+const FEM_PARTS=["Glutes","Legs","Back","Shoulders","Core","Biceps","Triceps","Chest"];
+const FEM_FIRST={Legs:["Hip thrust","Romanian deadlift","Goblet squat","Bulgarian split squat","Walking lunges"],Back:["Lat pulldown","Assisted pull-ups","Seated cable row","Dumbbell row"],Chest:["Push-ups","Dumbbell bench press","Incline dumbbell press","Machine chest press"],Shoulders:["Dumbbell shoulder press","Lateral raise","Rear delt fly"]};
+const partsOrder=()=>gender()==="f"?FEM_PARTS:PARTS;
+function libFor(part){const base=LIB[part]||[];if(gender()!=="f"||!FEM_FIRST[part])return base;const f=FEM_FIRST[part].filter(x=>base.includes(x));return f.concat(base.filter(x=>!f.includes(x)))}
 const app=document.getElementById("app");
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const pad=n=>String(n).padStart(2,"0");
@@ -47,7 +56,7 @@ function applyTheme(t){
 const blank=()=>({workouts:[],active:null,custom:{},profile:{},pending:{up:{},del:{},state:0}});
 let S=blank();
 let logDate=null,pastMins=60,tab="workout",period="week",pickPart=null,showAllParts=false,summary=null,openId=null,progEx=null,draft={w:"",r:""},msgText="",popSet=false;
-let authEmail="",authName="",pendingName="",ready=false,FB=null,fbAuth=null,fdb=null,user=null,authMode="signin",authMsg="",authBusy=false,syncState="idle",syncErr="",flushing=false,flushTimer=null,ver=1,bootError="";
+let authEmail="",authName="",pendingName="",authGender="",pendingGender="",ready=false,FB=null,fbAuth=null,fdb=null,user=null,authMode="signin",authMsg="",authBusy=false,syncState="idle",syncErr="",flushing=false,flushTimer=null,ver=1,bootError="";
 
 /* ---------- Local cache (per user) ---------- */
 const cacheKey=()=>"daanav-v1:"+(user?user.id:"none");
@@ -144,7 +153,7 @@ function history(name,excludeId,upTo){
   return out;
 }
 function bestW(name,excludeId,upTo){let b=0;for(const h of history(name,excludeId,upTo))for(const s of h.sets)if(s.w>b)b=s.w;return b}
-function exercisesFor(part){return LIB[part].concat((S.custom[part]||[]).filter(n=>!LIB[part].includes(n)))}
+function exercisesFor(part){return libFor(part).concat((S.custom[part]||[]).filter(n=>!LIB[part].includes(n)))}
 
 function setHead(k,t){document.getElementById("kicker").textContent=k;document.getElementById("title").textContent=t}
 
@@ -161,8 +170,8 @@ function viewWorkout(){
       '<button class="chip'+(ld===yest?" on":"")+'" role="radio" aria-checked="'+(ld===yest)+'" data-logdate="'+yest+'">Yesterday</button>'+
       '<label class="chip datepick'+(ld&&ld!==yest?" on":"")+'"><span>'+(ld&&ld!==yest?esc(short(ld)):"Earlier date")+'</span><input type="date" id="logDateIn" max="'+yest+'" min="2015-01-01" value="'+(ld||"")+'" aria-label="Pick an earlier date"></label></div>'+
       (ld?'<p class="pastnote">Logging for <b>'+esc(long(ld))+'</b>.</p><div class="durrow"><label for="pastMinsIn">How long was it?</label><span><input type="number" id="pastMinsIn" inputmode="numeric" min="5" max="300" step="5" value="'+pastMins+'"> min</span></div>':'')+'</section>';
-    return (user.name||isGuest()?'':nameCard(true))+dateCard+'<section class="card"><h2>Pick a body part</h2><p class="sub">You can add more body parts once you’ve started.</p><div class="parts">'+
-      PARTS.map(p=>'<button class="part" data-start="'+p+'"><b>'+p+'</b><small>'+lastTrained(p)+'</small></button>').join("")+
+    return (gender()?'':genderCard())+(user.name||isGuest()?'':nameCard(true))+dateCard+'<section class="card"><h2>Pick a body part</h2><p class="sub">You can add more body parts once you’ve started.</p><div class="parts">'+
+      partsOrder().map(p=>'<button class="part" data-start="'+p+'"><b>'+p+'</b><small>'+lastTrained(p)+'</small></button>').join("")+
       '</div></section><section class="card"><h3>This week</h3><div class="tiles">'+tile("Workouts",ws.length)+tile("Volume",fmt(ws.reduce((a,w)=>a+volOf(w),0))+" kg")+'</div></section>';
   }
   if(A.cur!=null&&A.ex[A.cur]) return viewLogger(A);
@@ -182,7 +191,7 @@ function viewWorkout(){
   h+='<div class="chips">'+A.parts.map(p=>'<button class="chip'+(p===part?" on":"")+'" data-pick="'+p+'">'+p+'</button>').join("")+
      '<button class="chip" data-act="toggleParts">'+(showAllParts?"Close":"+ Body part")+'</button></div>';
   if(showAllParts){
-    const rest=PARTS.filter(p=>!A.parts.includes(p));
+    const rest=partsOrder().filter(p=>!A.parts.includes(p));
     h+=rest.length?'<div class="chips">'+rest.map(p=>'<button class="chip" data-addpart="'+p+'">+ '+p+'</button>').join("")+'</div>':'';
   }
   h+='<div class="exlist">'+exercisesFor(part).map(n=>{
@@ -413,12 +422,22 @@ function viewGuestAccount(){
   let h='<section class="card guestnote big"><div class="gn-t"><b>Sign up free to monitor your progress properly</b><small>Right now '+(n?n+' workout'+(n===1?' is':'s are'):'everything is')+' saved only on this phone. Clearing Safari data or losing the phone loses it. Create a free account and your workouts so far move into it automatically.</small></div>'+
     '<button class="btn wide" data-act="guestsignup">Create free account</button><button class="link" data-act="guestsignin" style="margin-top:6px">I already have an account · Sign in</button></section>';
   const ct=curTheme();
+  h+=genderSection();
   h+='<section class="card"><h3>Theme</h3><div class="themes" role="radiogroup" aria-label="App theme">'+THEMES.map(t=>
     '<button class="theme" role="radio" aria-checked="'+(t.id===ct)+'" data-themepick="'+t.id+'"><span class="sw" style="background:'+t.bg+';color:'+t.fg+';font:'+t.font+'">Aa</span>'+
     '<span><b>'+t.name+(t.id==="red"?' <small style="display:inline;font-weight:600">· default</small>':'')+'</b><small>'+t.desc+'</small></span>'+
     '<span class="tick" aria-hidden="true">'+(t.id===ct?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>':'')+'</span></button>').join("")+'</div></section>';
   h+='<section class="card"><button class="btn danger wide" data-act="guestexit">'+SIGNOUT_ICON+'Leave trial mode</button><p class="sub" style="margin:10px 0 0">Your trial workouts stay on this phone and come back if you try again or sign up.</p></section>';
   return h;
+}
+function genderCard(){
+  return '<section class="card gcard"><h3>Who’s training?</h3><p class="sub">We’ll put the body parts and exercises that suit you first. You can change this any time in Account.</p><div class="gopts">'+
+    G_OPTS.map(([v,l])=>'<button class="btn ghost" data-gender="'+v+'">'+l+'</button>').join("")+'</div></section>';
+}
+function genderSection(){
+  const g=gender();
+  return '<section class="card"><h3>Training profile</h3><p class="sub">Used to suggest body parts and exercises. Everyone can still use every exercise.</p><div class="seg gseg" role="radiogroup" aria-label="Gender">'+
+    G_OPTS.map(([v,l])=>'<button role="radio" aria-checked="'+(g===v)+'" class="'+(g===v?"on":"")+'" data-gender="'+v+'">'+l+'</button>').join("")+'</div></section>';
 }
 function viewAccount(){
   if(isGuest())return viewGuestAccount();
@@ -432,6 +451,7 @@ function viewAccount(){
     '<button class="btn wide" type="submit" style="margin-top:14px">Save</button></form><p class="msg">'+esc(acctMsg.name||"")+'</p>'+
     (user.email?'<dl class="facts"><div><dt>Email</dt><dd>'+esc(user.email)+'</dd></div></dl>':'')+'</section>';
   const ct=curTheme();
+  h+=genderSection();
   h+='<section class="card"><h3>Theme</h3><div class="themes" role="radiogroup" aria-label="App theme">'+THEMES.map(t=>
     '<button class="theme" role="radio" aria-checked="'+(t.id===ct)+'" data-themepick="'+t.id+'"><span class="sw" style="background:'+t.bg+';color:'+t.fg+';font:'+t.font+'">Aa</span>'+
     '<span><b>'+t.name+(t.id==="red"?' <small style="display:inline;font-weight:600">· default</small>':'')+'</b><small>'+t.desc+'</small></span>'+
@@ -509,7 +529,8 @@ function viewAuth(){
   let h='<section class="card">';
   if(authMode!=="forgot")h+='<p class="sub">'+M[1]+'</p><div class="socials"><button class="btn ghost wide social" data-act="google"'+(authBusy?" disabled":"")+'>'+G_ICON+'Continue with Google</button></div><div class="or"><span>or use email</span></div>';
   h+='<form id="authForm" novalidate>'+(authMode==="forgot"?'<p class="sub">'+M[1]+'</p>':'');
-  if(authMode==="signup")h+='<label class="fl" for="au-name">Your name</label><input type="text" id="au-name" maxlength="40" autocomplete="name" value="'+esc(authName)+'">';
+  if(authMode==="signup")h+='<label class="fl" for="au-name">Your name</label><input type="text" id="au-name" maxlength="40" autocomplete="name" value="'+esc(authName)+'">'+
+    '<fieldset class="gpick"><legend class="fl">I am</legend>'+G_OPTS.map(([v,l])=>'<label><input type="radio" name="au-gender" value="'+v+'"'+(authGender===v?" checked":"")+'><span>'+l+'</span></label>').join("")+'</fieldset>';
   h+='<label class="fl" for="au-email">Email</label><input type="email" id="au-email" autocomplete="email" inputmode="email" required value="'+esc(authEmail)+'">';
   if(authMode!=="forgot")h+='<label class="fl" for="au-pass">Password</label><input type="password" id="au-pass" minlength="6" required autocomplete="'+(authMode==="signin"?"current-password":"new-password")+'">';
   h+='<button class="btn wide" type="submit" style="margin-top:14px"'+(authBusy?" disabled":"")+'>'+(authBusy?"Please wait…":M[2])+'</button><p class="msg" id="authMsg">'+esc(authMsg)+'</p></form>';
@@ -533,7 +554,7 @@ async function submitAuth(){
   const email=(document.getElementById("au-email")||{}).value,pass=(document.getElementById("au-pass")||{}).value;
   const em=email&&email.trim();
   authEmail=em||"";
-  if(authMode==="signup"){authName=((document.getElementById("au-name")||{}).value||"").trim().replace(/\s+/g," ").slice(0,40);
+  if(authMode==="signup"){const gr=document.querySelector('input[name="au-gender"]:checked');authGender=gr?gr.value:"";authName=((document.getElementById("au-name")||{}).value||"").trim().replace(/\s+/g," ").slice(0,40);
     if(!authName){authMsg="Enter your name.";render();return}}
   if(!/^\S+@\S+\.\S+$/.test(em||"")){authMsg="Enter a valid email address.";render();return}
   if(authMode!=="forgot"&&(!pass||pass.length<6)){authMsg="Password must be at least 6 characters.";render();return}
@@ -542,7 +563,7 @@ async function submitAuth(){
   try{
     if(authMode==="signin")await FB.signInWithEmailAndPassword(fbAuth,em,pass);
     else if(authMode==="signup"){
-      pendingName=authName;
+      pendingName=authName;pendingGender=authGender;
       const cred=await FB.createUserWithEmailAndPassword(fbAuth,em,pass);
       try{await FB.updateProfile(cred.user,{displayName:authName})}catch(e){}
       if(user&&user.id===cred.user.uid&&!user.name){user.name=authName;saveLast()}
@@ -879,6 +900,7 @@ app.addEventListener("click",e=>{
   if(d.period){period=d.period;render();return}
   if(d.open){openId=openId===d.open?null:d.open;render();return}
   if(d.lbp){lbPeriod=d.lbp;render();return}
+  if(d.gender){const first=!gender();S.profile=Object.assign({},S.profile,{gender:d.gender});markState();render();if(first&&tab==="workout")toast("Thanks! Your exercises are set up.",null);return}
   if(d.lbm){lbMetric=d.lbm;render();return}
   if(d.calm){const[y,m]=calYm.split("-").map(Number),nd=new Date(y,m-1+(+d.calm),1);calYm=nd.getFullYear()+"-"+pad(nd.getMonth()+1);render();return}
   if(d.calday){const w=S.workouts.find(x=>x.date===d.calday);if(w){openId=w.id;go("history");setTimeout(()=>{const el=document.querySelector('[data-open="'+w.id+'"]');if(el)el.scrollIntoView({block:"center"})},60)}return}
@@ -975,7 +997,9 @@ function handleSession(u){
   user={id:u.id,email:u.email||"",name:u.name||pendingName||"",phone:u.phone||"",providers:u.providers||[],emailVerified:!!u.verified};pendingName="";
   authOpen=false;
   saveLast();
-  loadCache();mergeGuest();authMsg="";render();
+  loadCache();mergeGuest();
+  if(pendingGender&&!gender()){S.profile=Object.assign({},S.profile,{gender:pendingGender});markState()}pendingGender="";
+  authMsg="";render();
   syncNow();
   setTimeout(()=>touchProfile(u.created),1500);
   lbRows=null;lbLoaded=false;lbLast="";setTimeout(()=>lbPublish(),4000);

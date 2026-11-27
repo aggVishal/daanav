@@ -457,17 +457,27 @@ function trophyState(list){
   return{s,earned};
 }
 function trophyIcon(t,cls){return '<span class="tro-i'+(cls?" "+cls:"")+'"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+(TI[t.icon]||TI.star)+'</svg></span>'}
-let trophyCat="All";
+let trophyCat="All",troOpen={};
 function trophyCase(){
-  const {s,earned}=trophyState(),got=TROPHIES.filter(t=>earned[t.id]).length,cats=["All",...new Set(TROPHIES.map(t=>t.cat))];
-  const list=TROPHIES.filter(t=>trophyCat==="All"||t.cat===trophyCat).slice().sort((a,b)=>(!!earned[b.id])-(!!earned[a.id])||(earned[b.id]||"").localeCompare(earned[a.id]||"")||(Math.min(1,a.val(s)/a.goal)<Math.min(1,b.val(s)/b.goal)?1:-1));
+  const {s,earned}=trophyState(),got=TROPHIES.filter(t=>earned[t.id]).length,cats=[...new Set(TROPHIES.map(t=>t.cat))];
+  const order=(a,b)=>(!!earned[b.id])-(!!earned[a.id])||(earned[b.id]||"").localeCompare(earned[a.id]||"")||(Math.min(1,b.val(s)/b.goal)-Math.min(1,a.val(s)/a.goal));
+  const card=t=>{const e=earned[t.id],v=Math.min(t.val(s),t.goal),pct=Math.round(v/t.goal*100);
+    return '<div class="tro'+(e?' got':'')+'">'+trophyIcon(t)+'<b>'+esc(t.name)+'</b><small>'+esc(t.desc)+'</small>'+
+      (e?'<em class="tro-date">Earned '+short(e)+'</em>':'<span class="tro-bar" aria-label="'+pct+'% done"><i style="width:'+pct+'%"></i></span><em class="tro-p">'+(t.unit==="kg"?fmt(Math.round(v)):v)+' / '+(t.unit==="kg"?fmt(t.goal):t.goal)+(t.unit?' '+t.unit:'')+'</em>')+'</div>'};
   let h='<section class="card trophies" id="trophies"><div class="tro-head"><h3>Trophy case</h3><span class="tro-count"><b>'+got+'</b>/'+TROPHIES.length+'</span></div>'+
-    '<p class="sub">You vs you. Every trophy is earned from your own training: showing up, staying consistent and getting stronger.</p>'+
-    '<div class="admtabs">'+cats.map(c=>'<button class="chip'+(trophyCat===c?' on':'')+'" data-trocat="'+c+'">'+c+'</button>').join("")+'</div><div class="tro-grid">';
-  for(const t of list){const e=earned[t.id],v=Math.min(t.val(s),t.goal),pct=Math.round(v/t.goal*100);
-    h+='<div class="tro'+(e?' got':'')+'">'+trophyIcon(t)+'<b>'+esc(t.name)+'</b><small>'+esc(t.desc)+'</small>'+
-      (e?'<em class="tro-date">Earned '+short(e)+'</em>':'<span class="tro-bar" aria-label="'+pct+'% done"><i style="width:'+pct+'%"></i></span><em class="tro-p">'+(t.unit==="kg"?fmt(Math.round(v)):v)+' / '+(t.unit==="kg"?fmt(t.goal):t.goal)+(t.unit?' '+t.unit:'')+'</em>')+'</div>'}
-  return h+'</div></section>';
+    '<p class="sub">You vs you. Every trophy is earned from your own training.</p>'+
+    '<div class="admtabs">'+["All",...cats].map(c=>'<button class="chip'+(trophyCat===c?' on':'')+'" data-trocat="'+c+'">'+c+'</button>').join("")+'</div>';
+  if(trophyCat==="All"&&!troOpen.__all){
+    const top=TROPHIES.slice().sort(order).slice(0,4);
+    return h+'<div class="tro-grid">'+top.map(card).join("")+'</div><button class="link tro-more" data-tromore="__all">Show all '+TROPHIES.length+' trophies</button></section>';
+  }
+  for(const c of cats){if(trophyCat!=="All"&&trophyCat!==c)continue;
+    const list=TROPHIES.filter(t=>t.cat===c).sort(order),n=list.filter(t=>earned[t.id]).length,open=!!troOpen[c],show=open?list:list.slice(0,4);
+    h+='<div class="tro-cat"><div class="tro-ch"><b>'+c+'</b><span>'+n+'/'+list.length+'</span></div><div class="tro-grid">'+show.map(card).join("")+'</div>'+
+      (list.length>4?'<button class="link tro-more" data-tromore="'+c+'" aria-expanded="'+open+'">'+(open?'Show less':'Show '+(list.length-4)+' more')+'</button>':'')+'</div>';
+  }
+  if(trophyCat==="All")h+='<button class="link tro-more" data-tromore="__all">Show fewer</button>';
+  return h+'</section>';
 }
 function newTrophies(before,after){return TROPHIES.filter(t=>after[t.id]&&!before[t.id])}
 
@@ -1088,6 +1098,7 @@ app.addEventListener("click",e=>{
   if(d.start){startWorkout(d.start);return}
   if(d.tabGo){go(d.tabGo);if(d.scroll)setTimeout(()=>{const el=document.getElementById(d.scroll);if(el)el.scrollIntoView({block:"start",behavior:"smooth"})},50);return}
   if(d.trocat){trophyCat=d.trocat;render();return}
+  if(d.tromore){troOpen[d.tromore]=!troOpen[d.tromore];render();if(!troOpen[d.tromore]){const el=b.closest(".tro-cat");if(el)el.scrollIntoView({block:"nearest"})}return}
   if(d.pick){pickPart=d.pick;render();return}
   if(d.addpart){A.parts.push(d.addpart);pickPart=d.addpart;showAllParts=false;markState();render();return}
   if(d.ex){openEx(d.ex,d.part);return}

@@ -699,3 +699,12 @@ nav .fab-c{position:relative}
 .tro-won .tro-i{width:46px;height:46px;margin:0;flex:none;animation:tropop .7s cubic-bezier(.2,1.6,.4,1) both .9s}
 .tro-won b{display:block;font-size:16px;color:var(--ink)}.tro-won small{color:var(--mute);font-size:13px}
 @keyframes tropop{from{transform:scale(0) rotate(-30deg)}to{transform:none}}
+.tro-cat{margin-top:14px}
+.tro-cat:first-of-type{margin-top:4px}
+.tro-ch{display:flex;justify-content:space-between;align-items:baseline;margin:0 2px 8px}
+.tro-ch b{font-size:14px;text-transform:uppercase;letter-spacing:.06em}
+.tro-ch span{font-size:13px;color:var(--mute);font-weight:700}
+.tro-more{display:block;margin:8px auto 0;font-weight:700}
+.tro{padding:12px 10px}
+.tro-i{width:48px;height:48px}
+.tro-i svg{width:24px;height:24px}

@@ -64,7 +64,7 @@ const hasPending=()=>Object.keys(S.pending.up).length+Object.keys(S.pending.del)
 function markUp(id){S.pending.up[id]=++ver;delete S.pending.del[id];queue()}
 function markDel(id){delete S.pending.up[id];S.pending.del[id]=1;queue()}
 function markState(){S.pending.state=++ver;queue()}
-function queue(){save();if(isGuest())return;setSync(navigator.onLine?"saving":"offline");clearTimeout(flushTimer);flushTimer=setTimeout(flush,700)}
+function queue(){save();if(isGuest())return;lbSoon();setSync(navigator.onLine?"saving":"offline");clearTimeout(flushTimer);flushTimer=setTimeout(flush,700)}
 
 /* ---------- Cloud sync (Firebase Cloud Firestore) ----------
    Data layout:  users/{uid}/workouts/{workoutId}   one document per finished workout
@@ -321,7 +321,8 @@ function viewProgress(){
   if(!S.workouts.length)return h+'<section class="card empty"><h3>No workouts yet</h3><p>Log your first workout and your progress shows up here.</p><button class="btn" data-tab-go="workout">Start a workout</button></section>';
   h+='<section class="card"><h3>'+(period==="week"?"This week":"This month")+'</h3><div class="tiles">'+
     tile("New PRs",prsIn(cur),'<em>heavier than ever before</em>')+tile("Workouts",c.n,chip(ch(c.n,p.n),lbl))+
-    tile("Sets",c.sets,chip(ch(c.sets,p.sets),lbl))+tile("Volume (kg)",fmt(c.vol),'<em class="note">weight × reps</em>'+chip(ch(c.vol,p.vol),lbl))+'</div></section>';
+    tile("Sets",c.sets,chip(ch(c.sets,p.sets),lbl))+tile("Volume (kg)",fmt(c.vol),'<em class="note">weight × reps</em>'+chip(ch(c.vol,p.vol),lbl))+'</div>'+
+    '<button class="btn wide sharebtn recapbtn" data-act="sharerecap">'+SHARE_ICON+'Share my '+(period==="week"?"week":"month")+' to story</button></section>';
   h+=consistencyCard();
   h+=strongerCard(cur,c);
   const names=[...new Set(sorted().flatMap(w=>w.ex.filter(e=>e.sets.length).map(e=>e.name)))].sort();
@@ -589,7 +590,7 @@ function render(){
   if(tab==="admin"&&!isAdmin())tab="account";
   if(tab==="invite"&&(isGuest()||!(CONF.referral.enabled||isAdmin())))tab="account";
   if(tab==="plans"&&!(CONF.pricing.enabled||isAdmin()))tab="account";
-  const v=tab==="workout"?viewWorkout():tab==="progress"?viewProgress():tab==="history"?viewHistory():tab==="admin"?viewAdmin():tab==="plans"?viewPlans():tab==="invite"?viewInvite():viewAccount();
+  const v=tab==="leaderboard"?viewLeaderboard():tab==="workout"?viewWorkout():tab==="progress"?viewProgress():tab==="history"?viewHistory():tab==="admin"?viewAdmin():tab==="plans"?viewPlans():tab==="invite"?viewInvite():viewAccount();
   const ann=CONF.general.announcement&&tab!=="admin"?'<section class="card announce" role="status">'+esc(CONF.general.announcement)+'</section>':'';
   app.innerHTML=ann+(isGuest()&&!["account","plans"].includes(tab)?guestBanner(tab!=="workout"):'')+v;
   fitText(app);
@@ -723,7 +724,7 @@ function showCele(){
   setTimeout(()=>{const b=el.querySelector('[data-cele="done"]');if(b)b.focus({preventScroll:true})},1600);
 }
 function closeCele(fromPop){if(fromPop!==true)navPopIf("ov","cele");const el=document.getElementById("cele");el.hidden=true;el.innerHTML="";document.body.classList.remove("celebrating");cancelAnimationFrame(celeRaf);go("workout",true)}
-document.getElementById("cele").addEventListener("click",e=>{const b=e.target.closest("[data-cele]");if(!b)return;if(b.dataset.cele==="done")closeCele();else if(b.dataset.cele==="share")openShare();else{celeRun++;showCele()}});
+document.getElementById("cele").addEventListener("click",e=>{const b=e.target.closest("[data-cele]");if(!b)return;if(b.dataset.cele==="done")closeCele();else if(b.dataset.cele==="share")openShare(workoutSpec(celeData));else{celeRun++;showCele()}});
 
 /* ---------- Share workout as an Instagram / WhatsApp story image ---------- */
 const APP_URL="aggvishal.github.io/daanav";
@@ -735,12 +736,19 @@ const STORY={
   chalk:{bg:["#D4FF3A","#C6F22A"],ink:"#0B0B0B",mute:"rgba(11,11,11,.6)",acc:"#0B0B0B",accInk:"#D4FF3A",hot:"#0B0B0B",hotInk:"#D4FF3A",card:"rgba(11,11,11,.07)",line:"rgba(11,11,11,.14)",disp:"900 {s}px Archivo,sans-serif",h:["SESSION","CRUSHED."]}};
 function rrect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
 function fitFont(c,txt,tpl,size,max){let s=size;c.font=tpl.replace("{s}",s);while(s>20&&c.measureText(txt).width>max){s-=2;c.font=tpl.replace("{s}",s)}return s}
-async function drawStory(d){
+/* A story spec: {dateLabel,kicker,h:[l1,l2],stats:[[label,value,unit,hot]],ym,cal:[days],mark:[days],streak,monthDays,rowsTitle,rows:[{name,right,badge}]} */
+function workoutSpec(d){
+  const prN=new Set(d.prs.map(p=>p.name));
+  return{dateLabel:long(d.date).toUpperCase(),kicker:(d.parts.join(" + ")+" DAY").toUpperCase(),
+    stats:[["LIFTED",fmt(d.vol),"kg"],["SETS",String(d.sets),""],["TIME",String(d.mins),"min"],["PRs",String(d.prs.length),"",d.prs.length>0]],
+    ym:monthOf(d.date),cal:d.cal||[],mark:[+d.date.slice(8)],streak:d.streak,monthDays:d.monthDays,
+    rows:(d.ex||[]).slice().sort((a,b)=>prN.has(b.name)-prN.has(a.name)).slice(0,4).map(r=>({name:r.name,right:(r.w?kg(r.w)+" kg":"BW")+" × "+r.r,badge:prN.has(r.name)?"PR":""}))};
+}
+async function drawStory(sp){
   const t=curTheme(),P=STORY[t],W=1080,H=1920,BODY="{s}px Inter,Barlow,sans-serif";
   try{if(document.fonts){await Promise.all([document.fonts.load(P.disp.replace("{s}",100)),document.fonts.load("600 40px Inter"),document.fonts.load("800 40px Inter")])}}catch(e){}
   const cv=document.createElement("canvas");cv.width=W;cv.height=H;const c=cv.getContext("2d");
   const g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,P.bg[0]);g.addColorStop(1,P.bg[1]);c.fillStyle=g;c.fillRect(0,0,W,H);
-  // diagonal accent stripes
   c.save();c.globalAlpha=t==="chalk"?.08:.18;c.fillStyle=t==="chalk"?"#0B0B0B":P.acc;
   for(let i=0;i<4;i++){c.beginPath();c.moveTo(W-420+i*110,0);c.lineTo(W-360+i*110,0);c.lineTo(W+40+i*110,520);c.lineTo(W-20+i*110,520);c.closePath();c.fill()}
   c.restore();
@@ -750,60 +758,77 @@ async function drawStory(d){
   c.strokeStyle=P.accInk;c.lineWidth=6;c.lineCap="round";c.beginPath();
   [[X+18,268,X+18,296],[X+46,268,X+46,296],[X+10,276,X+10,288],[X+54,276,X+54,288],[X+18,282,X+46,282]].forEach(a=>{c.moveTo(a[0],a[1]);c.lineTo(a[2],a[3])});c.stroke();
   c.fillStyle=P.ink;c.font=P.disp.replace("{s}",54);c.fillText("DAANAV",X+86,302);
-  c.fillStyle=P.mute;c.font="600 "+BODY.replace("{s}",32);c.textAlign="right";c.fillText(long(d.date).toUpperCase(),X+IW,298);c.textAlign="left";
+  c.fillStyle=P.mute;c.font="600 "+BODY.replace("{s}",32);c.textAlign="right";fitFont(c,sp.dateLabel,"600 "+BODY,32,IW-330);c.fillText(sp.dateLabel,X+IW,298);c.textAlign="left";
   // kicker + headline
-  c.fillStyle=t==="chalk"?P.ink:P.hot;c.font="800 "+BODY.replace("{s}",36);
-  const kick=(d.parts.join(" + ")+" DAY").toUpperCase();fitFont(c,kick,"800 "+BODY,36,IW);c.fillText(kick,X,430);
-  c.fillStyle=P.ink;
-  const hs=Math.min(fitFont(c,P.h[0],P.disp,t==="iron"?140:150,IW),fitFont(c,P.h[1],P.disp,t==="iron"?140:150,IW));c.font=P.disp.replace("{s}",hs);
-  c.fillText(P.h[0],X,430+hs*.98);c.fillStyle=t==="chalk"?P.ink:P.acc;c.fillText(P.h[1],X,430+hs*1.9);
+  c.fillStyle=t==="chalk"?P.ink:P.hot;fitFont(c,sp.kicker,"800 "+BODY,36,IW);c.fillText(sp.kicker,X,430);
+  const HL=sp.h||P.h;c.fillStyle=P.ink;
+  const hs=Math.min(fitFont(c,HL[0],P.disp,t==="iron"?140:150,IW),fitFont(c,HL[1],P.disp,t==="iron"?140:150,IW));c.font=P.disp.replace("{s}",hs);
+  c.fillText(HL[0],X,430+hs*.98);c.fillStyle=t==="chalk"?P.ink:P.acc;c.fillText(HL[1],X,430+hs*1.9);
   // stats: one row of four
   let y=430+hs*1.9+60;const gap=20,cw=(IW-gap*3)/4,ch=170;
-  const stats=[["LIFTED",fmt(d.vol),"kg"],["SETS",String(d.sets),""],["TIME",String(d.mins),"min"],["PRs",String(d.prs.length),""]];
-  stats.forEach((st,i)=>{const sx=X+i*(cw+gap),hot=i===3&&d.prs.length;
+  sp.stats.forEach((st,i)=>{const sx=X+i*(cw+gap),hot=!!st[3];
     c.fillStyle=hot?P.hot:P.card;rrect(c,sx,y,cw,ch,28);c.fill();
-    c.fillStyle=hot?P.hotInk:P.mute;c.font="700 "+BODY.replace("{s}",24);c.fillText(st[0],sx+24,y+46);
+    c.fillStyle=hot?P.hotInk:P.mute;fitFont(c,st[0],"700 "+BODY,24,cw-40);c.fillText(st[0],sx+24,y+46);
     c.fillStyle=hot?P.hotInk:P.ink;const ns=fitFont(c,st[1],P.disp,80,cw-48);c.font=P.disp.replace("{s}",ns);c.fillText(st[1],sx+24,y+126);
     if(st[2]){c.fillStyle=hot?P.hotInk:P.mute;c.font="700 "+BODY.replace("{s}",24);c.fillText(st[2],sx+24,y+156)}});
   y+=ch+30;
-  // consistency: this month's calendar + week streak
+  // consistency: month calendar + week streak
   const cy=y,chh=410;c.fillStyle=P.card;rrect(c,X,cy,IW,chh,32);c.fill();
-  const ym=monthOf(d.date),[yy,mm]=ym.split("-").map(Number),lead=(new Date(yy,mm-1,1).getDay()+6)%7,nd=new Date(yy,mm,0).getDate(),on=new Set(d.cal||[]),pitch=52,cs=44,gx=X+34,gy=cy+78;
+  const ym=sp.ym,[yy,mm]=ym.split("-").map(Number),lead=(new Date(yy,mm-1,1).getDay()+6)%7,nd=new Date(yy,mm,0).getDate(),on=new Set(sp.cal||[]),mk=new Set(sp.mark||[]),pitch=52,cs=44,gx=X+34,gy=cy+78;
   c.textAlign="center";c.fillStyle=P.mute;c.font="700 "+BODY.replace("{s}",24);
   ["M","T","W","T","F","S","S"].forEach((l,i)=>c.fillText(l,gx+i*pitch+cs/2,cy+56));
-  for(let dd=1;dd<=nd;dd++){const ix=(lead+dd-1)%7,iy=Math.floor((lead+dd-1)/7),cx=gx+ix*pitch,cyy=gy+iy*pitch,isOn=on.has(dd),isDay=dd===+d.date.slice(8);
-    if(isOn){c.fillStyle=t==="chalk"?"#0B0B0B":P.acc;rrect(c,cx,cyy,cs,cs,12);c.fill();
+  for(let dd=1;dd<=nd;dd++){const ix=(lead+dd-1)%7,iy=Math.floor((lead+dd-1)/7),cx=gx+ix*pitch,cyy=gy+iy*pitch;
+    if(on.has(dd)){c.fillStyle=t==="chalk"?"#0B0B0B":P.acc;rrect(c,cx,cyy,cs,cs,12);c.fill();
       c.strokeStyle=t==="chalk"?"#D4FF3A":P.accInk;c.lineWidth=4;c.lineCap="round";c.beginPath();
       [[13,14,13,30],[31,14,31,30],[8,18,8,26],[36,18,36,26],[13,22,31,22]].forEach(q=>{c.moveTo(cx+q[0],cyy+q[1]);c.lineTo(cx+q[2],cyy+q[3])});c.stroke()}
     else{c.strokeStyle=P.line;c.lineWidth=2;rrect(c,cx+1,cyy+1,cs-2,cs-2,12);c.stroke();c.fillStyle=P.mute;c.font="600 "+BODY.replace("{s}",20);c.fillText(String(dd),cx+cs/2,cyy+29)}
-    if(isDay){c.strokeStyle=P.hot;c.lineWidth=4;rrect(c,cx-5,cyy-5,cs+10,cs+10,15);c.stroke()}}
+    if(mk.has(dd)){c.strokeStyle=P.hot;c.lineWidth=4;rrect(c,cx-5,cyy-5,cs+10,cs+10,15);c.stroke()}}
   c.textAlign="left";
-  const rx=gx+7*pitch+40,rw=X+IW-30-rx;
+  const rx=gx+7*pitch+40,rw=X+IW-30-rx,stk=sp.streak||0;
   c.fillStyle=P.mute;c.font="700 "+BODY.replace("{s}",24);c.fillText("CONSISTENCY",rx,cy+80);
-  const sN=String(d.streak||1);c.fillStyle=t==="chalk"?P.ink:P.acc;const sz=fitFont(c,sN,P.disp,130,rw*0.5);c.font=P.disp.replace("{s}",sz);c.fillText(sN,rx,cy+215);
-  const sw2=c.measureText(sN).width;c.fillStyle=P.ink;c.font="800 "+BODY.replace("{s}",30);c.fillText((d.streak||1)===1?"WEEK":"WEEKS",rx+sw2+16,cy+175);c.fillText("STREAK",rx+sw2+16,cy+213);
-  c.fillStyle=P.ink;fitFont(c,pl(d.monthDays||1,"day")+" trained","800 "+BODY,38,rw);c.fillText(pl(d.monthDays||1,"day")+" trained",rx,cy+300);
+  const sN=String(stk);c.fillStyle=t==="chalk"?P.ink:P.acc;const sz=fitFont(c,sN,P.disp,130,rw*0.5);c.font=P.disp.replace("{s}",sz);c.fillText(sN,rx,cy+215);
+  const sw2=c.measureText(sN).width;c.fillStyle=P.ink;c.font="800 "+BODY.replace("{s}",30);c.fillText(stk===1?"WEEK":"WEEKS",rx+sw2+16,cy+175);c.fillText("STREAK",rx+sw2+16,cy+213);
+  const dl=pl(sp.monthDays||0,"day")+" trained";c.fillStyle=P.ink;fitFont(c,dl,"800 "+BODY,38,rw);c.fillText(dl,rx,cy+300);
   c.fillStyle=P.mute;c.font="600 "+BODY.replace("{s}",28);c.fillText("in "+monthName(ym,{month:"long"}),rx,cy+342);
   y=cy+chh+80;
-  // exercises / PRs
-  const prN=new Set(d.prs.map(p=>p.name)),rows=(d.ex||[]).slice().sort((a,b)=>prN.has(b.name)-prN.has(a.name)).slice(0,4);
+  // rows (exercises / strength gains)
   const maxY=1490;
-  rows.forEach(r=>{if(y>maxY)return;
+  (sp.rows||[]).forEach(r=>{if(y>maxY)return;
     c.strokeStyle=P.line;c.lineWidth=2;c.beginPath();c.moveTo(X,y-54);c.lineTo(X+IW,y-54);c.stroke();
-    const right=(r.w?kg(r.w)+" kg":"BW")+" × "+r.r;c.font="800 "+BODY.replace("{s}",38);const rw2=c.measureText(right).width;
-    let lx=X;if(prN.has(r.name)){c.fillStyle=P.hot;rrect(c,X,y-34,72,44,22);c.fill();c.fillStyle=P.hotInk;c.font="800 "+BODY.replace("{s}",24);c.fillText("PR",X+20,y-4);lx=X+88}
+    c.font="800 "+BODY.replace("{s}",38);const rw2=c.measureText(r.right).width;
+    let lx=X;if(r.badge){c.font="800 "+BODY.replace("{s}",24);const bw=c.measureText(r.badge).width+40;c.fillStyle=P.hot;rrect(c,X,y-34,bw,44,22);c.fill();c.fillStyle=P.hotInk;c.fillText(r.badge,X+20,y-4);lx=X+bw+16}
     c.fillStyle=P.ink;fitFont(c,r.name,"700 "+BODY,38,IW-rw2-(lx-X)-30);c.fillText(r.name,lx,y);
-    c.font="800 "+BODY.replace("{s}",38);c.textAlign="right";c.fillStyle=t==="chalk"?P.ink:P.acc;c.fillText(right,X+IW,y);c.textAlign="left";y+=80});
+    c.font="800 "+BODY.replace("{s}",38);c.textAlign="right";c.fillStyle=t==="chalk"?P.ink:P.acc;c.fillText(r.right,X+IW,y);c.textAlign="left";y+=80});
   // promo footer (kept above the bottom ~250px Instagram covers)
   const py=1530;c.fillStyle=P.acc;rrect(c,X,py,IW,150,36);c.fill();
-  c.fillStyle=P.accInk;c.font="800 "+BODY.replace("{s}",40);fitFont(c,"Track your gym progress — free","800 "+BODY,40,IW-80);c.fillText("Track your gym progress — free",X+40,py+64);
+  c.fillStyle=P.accInk;fitFont(c,"Track your gym progress — free","800 "+BODY,40,IW-80);c.fillText("Track your gym progress — free",X+40,py+64);
   c.globalAlpha=.85;c.font="600 "+BODY.replace("{s}",36);c.fillText(APP_URL,X+40,py+118);c.globalAlpha=1;
   return new Promise(r=>cv.toBlob(r,"image/png"));
 }
-async function openShare(){
+/* Weekly / monthly recap story from the Progress tab. */
+function recapSpec(per){
+  const today=dkey(new Date()),key=per==="week"?weekOf(today):monthOf(today),inP=w=>(per==="week"?weekOf(w.date):monthOf(w.date))===key;
+  const ws=S.workouts.filter(inP),days=new Set(ws.map(w=>w.date)),vol=ws.reduce((a,w)=>a+volOf(w),0),sets=ws.reduce((a,w)=>a+allSets(w).length,0);
+  let prs=0;{const best={},hit=new Set();for(const w of sorted())for(const e of w.ex)for(const s of e.sets){const b=best[e.name]||0;if(inP(w)&&b>0&&s.w>b)hit.add(e.name);if(s.w>b)best[e.name]=s.w}prs=hit.size}
+  // strength gains: best e1RM in period vs before
+  const before={},now={};for(const w of S.workouts){const tgt=inP(w)?now:w.date<(per==="week"?key:key+"-01")?before:null;if(!tgt)continue;
+    for(const e of w.ex)for(const st of e.sets){if(!st.w)continue;const v=e1rm(st);if(!tgt[e.name]||v>tgt[e.name])tgt[e.name]=v}}
+  const gains=Object.keys(now).filter(n=>before[n]&&now[n]-before[n]>0.01).map(n=>({name:n,right:"+"+kg(Math.round((now[n]-before[n])*2)/2)+" kg",badge:"▲ 1RM"})).sort((a,b)=>parseFloat(b.right.slice(1))-parseFloat(a.right.slice(1)));
+  const rows=gains.length?gains.slice(0,3):Object.keys(now).slice(0,3).map(n=>({name:n,right:kg(Math.round(now[n]*2)/2)+" kg",badge:"1RM"}));
+  const ym=monthOf(today),mk=[];
+  if(per==="week"){const d=parse(key);for(let i=0;i<7;i++){const k=dkey(d);if(k.slice(0,7)===ym)mk.push(+k.slice(8));d.setDate(d.getDate()+1)}}
+  const wkLabel=per==="week"?"WEEK OF "+short(key).toUpperCase():monthName(ym).toUpperCase();
+  const H={red:per==="week"?["MY WEEK","IN IRON."]:["MY MONTH","IN IRON."],iron:per==="week"?["WEEKLY","GRIND."]:["MONTHLY","GRIND."],chalk:per==="week"?["WEEK","RECAP."]:["MONTH","RECAP."]}[curTheme()];
+  return{dateLabel:wkLabel,kicker:(per==="week"?"THIS WEEK":"THIS MONTH")+" · "+pl(ws.length,"WORKOUT").toUpperCase(),h:H,
+    stats:[["WORKOUTS",String(ws.length),""],["DAYS",String(days.size),""],["PRs",String(prs),"",prs>0],["VOLUME",vol>=1e5?(vol/1000).toFixed(0)+"k":fmt(vol),"kg"]],
+    ym,cal:[...trainedDays()].filter(k=>k.slice(0,7)===ym).map(k=>+k.slice(8)),mark:mk,streak:weekStreak(),monthDays:monthDays(ym),rows,count:ws.length};
+}
+let shareSpec=null;
+async function openShare(spec){
+  shareSpec=spec||workoutSpec(celeData);
   const ov=document.getElementById("share");
   ov.innerHTML='<div class="sh-card"><p class="sh-load">Making your story…</p></div>';ov.hidden=false;navPush({ov:"share"});
-  shareBlob=null;try{shareBlob=await drawStory(celeData)}catch(e){}
+  shareBlob=null;try{shareBlob=await drawStory(shareSpec)}catch(e){}
   if(!shareBlob){ov.innerHTML='<div class="sh-card"><p>Couldn’t make the image on this device.</p><button class="btn wide" data-sh="close">Close</button></div>';return}
   if(shareUrl)URL.revokeObjectURL(shareUrl);shareUrl=URL.createObjectURL(shareBlob);
   const f=new File([shareBlob],"daanav-workout.png",{type:"image/png"});
@@ -819,7 +844,7 @@ document.getElementById("share").addEventListener("click",e=>{
   if(b.dataset.sh==="close"){ov.hidden=true;navPopIf("ov","share");return}
   if(b.dataset.sh==="go"&&shareBlob){
     const f=new File([shareBlob],"daanav-workout.png",{type:"image/png"});
-    navigator.share({files:[f],title:"My Daanav workout"}).then(()=>{ov.hidden=true;navPopIf("ov","share")}).catch(()=>{});
+    navigator.share({files:[f],title:"My Daanav progress"}).then(()=>{ov.hidden=true;navPopIf("ov","share")}).catch(()=>{});
   }
 });
 
@@ -855,6 +880,8 @@ app.addEventListener("click",e=>{
   if(d.delset!=null){A.ex[A.cur].sets.splice(+d.delset,1);markState();render();return}
   if(d.period){period=d.period;render();return}
   if(d.open){openId=openId===d.open?null:d.open;render();return}
+  if(d.lbp){lbPeriod=d.lbp;render();return}
+  if(d.lbm){lbMetric=d.lbm;render();return}
   if(d.calm){const[y,m]=calYm.split("-").map(Number),nd=new Date(y,m-1+(+d.calm),1);calYm=nd.getFullYear()+"-"+pad(nd.getMonth()+1);render();return}
   if(d.calday){const w=S.workouts.find(x=>x.date===d.calday);if(w){openId=w.id;go("history");setTimeout(()=>{const el=document.querySelector('[data-open="'+w.id+'"]');if(el)el.scrollIntoView({block:"center"})},60)}return}
   if(d.delw){
@@ -875,6 +902,9 @@ app.addEventListener("click",e=>{
     case"syncnow":setSync("saving");syncNow();break;
     case"signout":signOut();break;
     case"shareinvite":shareInvite();break;
+    case"lbjoin":lbJoin();break;
+    case"lbleave":lbLeave();break;
+    case"sharerecap":{const sp=recapSpec(period);if(!sp.count){toast("Log a workout "+(period==="week"?"this week":"this month")+" first",null);break}openShare(sp);break}
     case"guesttry":enterGuest();break;
     case"guestsignup":navPush({auth:"open"});authOpen=true;authMode="signup";authMsg="";render();window.scrollTo(0,0);break;
     case"guestsignin":navPush({auth:"open"});authOpen=true;authMode="signin";authMsg="";render();window.scrollTo(0,0);break;
@@ -950,6 +980,76 @@ function handleSession(u){
   loadCache();mergeGuest();authMsg="";render();
   syncNow();
   setTimeout(()=>touchProfile(u.created),1500);
+  lbRows=null;lbLoaded=false;lbLast="";setTimeout(()=>lbPublish(),4000);
+}
+/* ---------- Leaderboard (opt-in): each member publishes a small summary to leaderboard/{uid} ---------- */
+let lbPeriod="week",lbMetric="days",lbRows=null,lbLoaded=false,lbBusy=false,lbMsg="",lbTimer=null,lbLast="";
+const lbJoined=()=>!!(S.profile&&S.profile.lb);
+const LB_METRICS=[["days","Days trained","days"],["streak","Streak","weeks"],["prs","PRs","PRs"],["vol","Volume","kg"]];
+function prsWhere(pred){const best={},hit=new Set();for(const w of sorted())for(const e of w.ex)for(const s of e.sets){const b=best[e.name]||0;if(pred(w)&&b>0&&s.w>b)hit.add(e.name);if(s.w>b)best[e.name]=s.w}return hit.size}
+function lbName(){const n=(user&&user.name||"").trim().split(/\s+/);return n[0]?(n[0]+(n[1]?" "+n[1][0].toUpperCase()+".":"")).slice(0,24):"Lifter"}
+function lbSummary(){
+  const today=dkey(new Date()),wk=weekOf(today),mo=monthOf(today),pw=w=>weekOf(w.date)===wk,pm=w=>monthOf(w.date)===mo;
+  const f=pred=>{const ws=S.workouts.filter(pred);return{d:new Set(ws.map(w=>w.date)).size,n:ws.length,v:Math.round(ws.reduce((a,w)=>a+volOf(w),0))}},a=f(pw),b=f(pm);
+  return{name:lbName(),wk,wDays:a.d,wWorkouts:a.n,wVol:a.v,wPRs:prsWhere(pw),mo,mDays:b.d,mWorkouts:b.n,mVol:b.v,mPRs:prsWhere(pm),streak:weekStreak(),streakWk:wk};
+}
+function lbSoon(){if(!lbJoined()||isGuest())return;clearTimeout(lbTimer);lbTimer=setTimeout(lbPublish,3000)}
+async function lbPublish(force){
+  if(!fdb||!user||isGuest()||!lbJoined()||!navigator.onLine)return;
+  const sum=lbSummary(),sig=JSON.stringify(sum);if(!force&&sig===lbLast)return;
+  try{await timeout(FB.setDoc(FB.doc(fdb,"leaderboard",user.id),Object.assign(sum,{updatedAt:stamp()})),10000);lbLast=sig;
+    if(lbRows){lbRows=lbRows.filter(r=>r.id!==user.id).concat([Object.assign({id:user.id},lbSummary())]);if(tab==="leaderboard")render()}}catch(e){}
+}
+async function lbLoad(){
+  if(lbLoaded||!fdb||isGuest())return;lbLoaded=true;
+  try{const qs=await timeout(FB.getDocs(FB.collection(fdb,"leaderboard")),12000);lbRows=qs.docs.map(d=>Object.assign({id:d.id},d.data()));lbMsg=""}
+  catch(e){lbRows=[];lbMsg=/permission/.test(e&&e.code||"")?"The leaderboard isn’t switched on in the database yet.":"Couldn’t load the leaderboard. Check your connection."}
+  if(tab==="leaderboard")render();
+}
+function lbVal(r,m,per){
+  const today=dkey(new Date()),wk=weekOf(today),mo=monthOf(today),pd=parse(wk);pd.setDate(pd.getDate()-7);const prev=dkey(pd);
+  if(m==="streak")return r.streakWk===wk||r.streakWk===prev?(+r.streak||0):0;
+  const w=per==="week",ok=w?r.wk===wk:r.mo===mo;if(!ok)return 0;
+  return +(w?{days:r.wDays,prs:r.wPRs,vol:r.wVol}[m]:{days:r.mDays,prs:r.mPRs,vol:r.mVol}[m])||0;
+}
+const I_TROPHY='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H4v1a4 4 0 0 0 4 4M16 6h4v1a4 4 0 0 1-4 4M12 13v4M8 21h8M9 17h6"/></svg>';
+function viewLeaderboard(){
+  setHead("Leaderboard","Compete with the crew");
+  let h='<div class="seg" role="tablist"><button class="'+(lbPeriod==="week"?"on":"")+'" data-lbp="week">This week</button><button class="'+(lbPeriod==="month"?"on":"")+'" data-lbp="month">This month</button></div>'+
+    '<div class="admtabs lbm">'+LB_METRICS.map(([id,l])=>'<button class="chip'+(lbMetric===id?' on':'')+'" data-lbm="'+id+'">'+l+'</button>').join("")+'</div>';
+  if(isGuest())return h+'<section class="card lbjoin"><span class="lbicon">'+I_TROPHY+'</span><h3>Compete with other lifters</h3><p class="sub">See who trains the most days, keeps the longest streak and hits the most PRs. Sign up free to join the leaderboard.</p><button class="btn wide" data-act="guestsignup">Sign up free</button></section>';
+  lbLoad();
+  if(!lbJoined())h+='<section class="card lbjoin"><span class="lbicon">'+I_TROPHY+'</span><h3>Join the leaderboard</h3><p class="sub">Other Daanav users will see your name as <b>'+esc(lbName())+'</b> and your totals: days trained, streak, PRs and volume. Your workouts and exercises stay private. You can leave any time.</p><button class="btn wide" data-act="lbjoin"'+(lbBusy?" disabled":"")+'>'+(lbBusy?"Joining…":"Join the leaderboard")+'</button></section>';
+  const M=LB_METRICS.find(x=>x[0]===lbMetric);
+  h+='<section class="card"><h3>'+M[1]+(lbMetric==="streak"?' <small class="mute">· weeks in a row</small>':' <small class="mute">· '+(lbPeriod==="week"?"this week":"this month")+'</small>')+'</h3>';
+  if(!lbRows)h+='<p class="sub">Loading…</p>';
+  else{
+    let rows=lbRows.slice();if(lbJoined()){rows=rows.filter(r=>r.id!==user.id);rows.push(Object.assign({id:user.id},lbSummary()))}
+    const tb=r=>{const w=lbPeriod==="week",okp=w?r.wk===weekOf(dkey(new Date())):r.mo===monthOf(dkey(new Date()));return okp?(+(w?r.wWorkouts:r.mWorkouts)||0)*1e9+(+(w?r.wVol:r.mVol)||0):0};
+    rows=rows.map(r=>({r,v:lbVal(r,lbMetric,lbPeriod),t:tb(r)})).filter(x=>x.v>0).sort((a,b)=>b.v-a.v||b.t-a.t||String(a.r.name).localeCompare(String(b.r.name)));
+    if(!rows.length)h+='<p class="sub">Nobody on the board yet. Log a workout and be the first!</p>';
+    else{let rank=0,prevV=null;
+      h+='<ol class="lb">'+rows.slice(0,50).map((x,i)=>{if(x.v!==prevV){rank=i+1;prevV=x.v}const me=user&&x.r.id===user.id;
+        return '<li class="'+(me?"me":"")+(rank<=3?" top r"+rank:"")+'"><span class="rk">'+rank+'</span><span class="av sm">'+esc((String(x.r.name||"?").trim()[0]||"?").toUpperCase())+'</span><span class="nm">'+esc(x.r.name||"Lifter")+(me?' <small>You</small>':'')+'</span><b class="num">'+(lbMetric==="vol"?fmt(x.v):x.v)+'<small> '+(lbMetric==="vol"?"kg":lbMetric==="days"?(x.v===1?"day":"days"):lbMetric==="streak"?(x.v===1?"wk":"wks"):"")+'</small></b></li>'}).join("")+'</ol>';
+      if(lbJoined()&&!rows.some(x=>x.r.id===user.id))h+='<p class="sub" style="margin:10px 0 0">You’re not on this board yet. Train '+(lbPeriod==="week"?"this week":"this month")+' to get on it.</p>';
+    }
+    if(lbMsg)h+='<p class="msg">'+esc(lbMsg)+'</p>';
+  }
+  if(lbMetric==="vol")h+='<p class="sub" style="margin:10px 0 0">Volume favours heavy leg days. Days trained and streak are the fairest ways to compete.</p>';
+  h+='</section>';
+  if(lbJoined())h+='<p style="text-align:center;margin:4px 0 0"><button class="link" data-act="lbleave">Leave the leaderboard</button></p>';
+  return h;
+}
+async function lbJoin(){
+  if(!navigator.onLine){toast("You’re offline. Connect to join.",null);return}
+  lbBusy=true;render();
+  S.profile=Object.assign({},S.profile,{lb:true});markState();
+  await lbPublish(true);lbBusy=false;lbLoaded=false;lbLoad();render();toast("You’re on the leaderboard",null);
+}
+async function lbLeave(){
+  S.profile=Object.assign({},S.profile,{lb:false});markState();lbLast="";
+  try{await timeout(FB.deleteDoc(FB.doc(fdb,"leaderboard",user.id)),10000)}catch(e){}
+  if(lbRows)lbRows=lbRows.filter(r=>r.id!==user.id);render();toast("You left the leaderboard",null);
 }
 /* ---------- App config: pricing, offers, coupons, referrals (edited in Admin) ---------- */
 const ADMIN_EMAIL="aggarwalvishal904@gmail.com";

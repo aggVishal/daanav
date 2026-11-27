@@ -20,6 +20,9 @@ A gym workout tracker: pick a body part, choose an exercise, log each set's weig
 - An animated celebration when you finish a workout
 - Consistency calendar with ticked training days, week streak and best streak
 - Share your finished workout (with your month calendar and streak) as an Instagram or WhatsApp story image
+- Opt-in leaderboard: days trained, week streak, PRs and volume, this week or this month
+- Share your weekly or monthly recap as a story image from the Progress tab
+- Back button / swipe-back works on every screen
 - Side menu with Account, Plans, Invite friends and Admin
 - Admin (only for the admin email): pricing and free trial, sitewide offers, coupons, referrals, users list, announcement banner and guest-mode switch
 - Try the app without an account (workouts stay on the phone, and move into your account when you sign up)

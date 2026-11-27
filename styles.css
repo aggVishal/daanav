@@ -123,7 +123,7 @@ main>.month:first-child{color:var(--headInk);margin-top:0;position:relative;opac
 .msg{font-size:14px;margin:10px 0 0}.msg:empty{display:none}
 .file{position:relative;overflow:hidden}
 .file input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:16px}
-nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:6px max(3vw,8px) calc(6px + var(--safeB));display:grid;grid-template-columns:repeat(3,minmax(0,1fr));z-index:4}
+nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:6px max(3vw,8px) calc(6px + var(--safeB));display:grid;grid-template-columns:repeat(4,minmax(0,1fr));z-index:4}
 nav button{min-height:54px;border-radius:12px;display:grid;place-items:center;gap:2px;font-size:13px;font-weight:600;color:var(--mute)}
 nav svg{width:24px;height:24px}
 nav button.on{color:var(--accent)}
@@ -532,3 +532,22 @@ textarea{padding:12px 14px;resize:vertical;font:inherit;font-size:16px;margin-bo
 .backbtn{display:inline-flex;align-items:center;gap:4px;min-height:40px;margin:0 0 6px -6px;padding:0 12px 0 4px;border-radius:999px;color:inherit;font-weight:700;font-size:15px;background:rgba(0,0,0,.18)}
 .backbtn[hidden]{display:none}
 [data-theme=chalk] .backbtn{background:rgba(11,11,11,.1)}
+.recapbtn{margin-top:14px}
+
+/* ---------- Leaderboard ---------- */
+.lbm{margin-top:12px}
+.lbjoin{text-align:center}
+.lbicon{display:inline-grid;place-items:center;width:64px;height:64px;border-radius:20px;background:var(--pr);color:var(--prInk);margin-bottom:6px}
+.lbicon svg{width:34px;height:34px}
+.lb{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:6px}
+.lb li{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;background:var(--soft)}
+.lb li.me{box-shadow:inset 0 0 0 2px var(--accent)}
+[data-theme=chalk] .lb li.me{box-shadow:inset 0 0 0 2px var(--ink)}
+.lb .rk{width:28px;text-align:center;font:var(--dw) 20px/1 var(--display);color:var(--mute);flex:none}
+.lb li.top .rk{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:16px;color:#2A1600}
+.lb li.r1 .rk{background:#F5C542}.lb li.r2 .rk{background:#C9CED6}.lb li.r3 .rk{background:#D9925B}
+.lb .nm{flex:1;min-width:0;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lb .nm small{font-size:11px;font-weight:800;background:var(--accent);color:var(--accentInk);padding:2px 6px;border-radius:999px;margin-left:4px;vertical-align:2px}
+.lb b{font:var(--dw) 22px/1 var(--display);font-stretch:var(--ds);white-space:nowrap}
+.lb b small{font:600 12px var(--body);color:var(--mute)}
+nav button{font-size:12px}

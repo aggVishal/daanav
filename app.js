@@ -512,8 +512,11 @@ function viewHome(){
       '<span class="act-x">'+w.ex.slice(0,open?99:3).map(e=>{const t=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);
         return '<span><i>'+esc(e.name)+(prs.includes(e.name)?' <em class="prb">PR</em>':'')+'</i><b class="num">'+(open?e.sets.map(s=>wl(s.w)+"×"+s.r).join(" · "):pl(e.sets.length,"set")+' · best '+(t.w?wl(t.w):"BW")+'×'+t.r)+'</b></span>'}).join("")+
       (!open&&w.ex.length>3?'<span class="more">+'+(w.ex.length-3)+' more</span>':'')+'</span></button>';
+    const nTro=TROPHIES.filter(t=>earned[t.id]===w.date).length,ach=[prs.length?pl(prs.length,"PR"):"",nTro?nTro+(nTro===1?" trophy":" trophies"):""].filter(Boolean).join(" · ");
+    const shareRow='<div class="act-f"><span class="act-ach">'+(ach?'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+TI.star+'</svg>'+ach:'')+'</span><button class="act-share" data-sharew="'+w.id+'" aria-label="Share this workout">'+SHARE_ICON+'Share</button></div>';
     if(w.photo||open)h+='<div class="act-ph" data-phw="'+w.id+'" data-mode="'+(open?"feed":"feed-ro")+'">'+photoSlot(w.id,open?"feed":"feed-ro")+'</div>';
     if(open)h+='<div class="row act-a"><button class="btn ghost" data-delw="'+w.id+'">Delete workout</button></div>';
+    h+=shareRow;
     h+='</section>';
   }
   if(ws.length>homeShow)h+='<button class="btn ghost wide" data-act="homemore">Show older workouts</button>';
@@ -1035,10 +1038,21 @@ function photoSlot(wid,mode){
 document.addEventListener("change",e=>{const t=e.target;if(t&&t.dataset&&t.dataset.phin){const f=t.files&&t.files[0];const wid=t.dataset.phin;t.value="";if(f)setWorkoutPhoto(wid,f)}});
 document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-phrm]");if(b){e.stopPropagation();removeWorkoutPhoto(b.dataset.phrm)}},true);
 
+/* Story data for any saved workout (used by Share on the Home feed). */
+function streakAt(date){const wk=new Set(S.workouts.filter(x=>x.date<=date).map(x=>weekOf(x.date))),d=parse(weekOf(date));let n=0;while(wk.has(dkey(d))){n++;d.setDate(d.getDate()-7)}return n}
+function shareDataFor(w){
+  const prs=[];for(const e of w.ex){const b=bestW(e.name,w.id,w.date),top=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);if(b>0&&top.w>b)prs.push({name:e.name,w:top.w,r:top.r})}
+  const ym=monthOf(w.date),{earned}=trophyState();
+  return{id:w.id,date:w.date,vol:volOf(w),sets:allSets(w).length,mins:w.start&&w.end&&w.end>w.start?Math.max(1,Math.round((w.end-w.start)/60000)):0,prs,parts:w.parts,
+    streak:streakAt(w.date),monthDays:[...trainedDays()].filter(k=>k.slice(0,7)===ym&&k<=w.date).length,cal:[...trainedDays()].filter(k=>k.slice(0,7)===ym&&k<=w.date).map(k=>+k.slice(8)),
+    trophies:TROPHIES.filter(t=>earned[t.id]===w.date).map(t=>({name:t.name,desc:t.desc,icon:t.icon})),
+    ex:w.ex.map(e=>{const t=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);return{name:e.name,w:t.w,r:t.r,n:e.sets.length}})};
+}
+async function shareWorkout(wid){const w=S.workouts.find(x=>x.id===wid);if(!w)return;if(w.photo&&!PH[w.id]){const d=await idbGet(phKey(w.id));if(d)PH[w.id]=d}openShare(workoutSpec(shareDataFor(w)))}
 function workoutSpec(d){
   const prN=new Set(d.prs.map(p=>p.name));
   return{photo:PH[d.id]||"",dateLabel:long(d.date).toUpperCase(),kicker:(d.parts.join(" + ")+" DAY").toUpperCase(),
-    stats:[["LIFTED",fmt(d.vol),"kg"],["SETS",String(d.sets),""],["TIME",String(d.mins),"min"],["PRs",String(d.prs.length),"",d.prs.length>0]],
+    stats:[["LIFTED",fmt(d.vol),"kg"],["SETS",String(d.sets),""],["TIME",d.mins?String(d.mins):"–",d.mins?"min":""],["PRs",String(d.prs.length),"",d.prs.length>0]],
     ym:monthOf(d.date),cal:d.cal||[],mark:[+d.date.slice(8)],streak:d.streak,monthDays:d.monthDays,
     rows:(d.trophies||[]).map(t=>({name:t.name,right:"",badge:"TROPHY"})).concat((d.ex||[]).slice().sort((a,b)=>prN.has(b.name)-prN.has(a.name)).slice(0,4).map(r=>({name:r.name,right:(r.w?kg(r.w)+" kg":"BW")+" × "+r.r,badge:prN.has(r.name)?"PR":""})))};
 }
@@ -1199,6 +1213,7 @@ app.addEventListener("click",e=>{
   if(d.start){startWorkout(d.start);return}
   if(d.tabGo){go(d.tabGo);if(d.scroll)setTimeout(()=>{const el=document.getElementById(d.scroll);if(el)el.scrollIntoView({block:"start",behavior:"smooth"})},50);return}
   if(d.trocat){trophyCat=d.trocat;render();return}
+  if(d.sharew){shareWorkout(d.sharew);return}
   if(d.tromore){troOpen[d.tromore]=!troOpen[d.tromore];render();if(!troOpen[d.tromore]){const el=b.closest(".tro-cat");if(el)el.scrollIntoView({block:"nearest"})}return}
   if(d.pick){pickPart=d.pick;render();return}
   if(d.addpart){A.parts.push(d.addpart);pickPart=d.addpart;showAllParts=false;markState();render();return}

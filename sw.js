@@ -2,7 +2,7 @@
 // Your own files: fresh from the network when online, cached copy when offline.
 // Library and fonts: cached after the first load.
 // Requests to Firebase (sign-in and your data) are never cached here.
-const CACHE = "daanav-fb-v35";
+const CACHE = "daanav-fb-v36";
 const SHELL = ["./", "index.html", "styles.css", "app.js", "figures.js", "exdata.js", "config.js", "manifest.webmanifest",
   "icons/icon-180.png", "icons/icon-192.png",
   "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js",

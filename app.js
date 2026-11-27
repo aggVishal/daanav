@@ -4,7 +4,7 @@ const LAST="daanav-last-user",GUEST="daanav-guest";
 let authOpen=false;
 const isGuest=()=>!!(user&&user.guest);
 function guestFlag(){try{return localStorage.getItem(GUEST)==="1"}catch(e){return false}}
-function enterGuest(){try{localStorage.setItem(GUEST,"1")}catch(e){}user={id:"guest",guest:true,name:"",email:"",providers:[]};authOpen=false;authMsg="";tab="workout";loadCache();setSync("idle");render();window.scrollTo(0,0)}
+function enterGuest(keepTab){try{localStorage.setItem(GUEST,"1")}catch(e){}user={id:"guest",guest:true,name:"",email:"",providers:[]};authOpen=false;authMsg="";if(keepTab!==true)tab="workout";loadCache();setSync("idle");render();window.scrollTo(0,0)}
 const LIB={
   Chest:["Bench press","Incline bench press","Dumbbell bench press","Incline dumbbell press","Machine chest press","Chest fly (machine)","Cable crossover","Push-ups","Dips"],
   Back:["Deadlift","Pull-ups","Lat pulldown","Barbell row","Seated cable row","Dumbbell row","T-bar row","Face pull"],
@@ -646,7 +646,7 @@ function render(){
   const v=tab==="leaderboard"?viewLeaderboard():tab==="workout"?viewWorkout():tab==="progress"?viewProgress():tab==="history"?viewHistory():tab==="admin"?viewAdmin():tab==="plans"?viewPlans():tab==="invite"?viewInvite():viewAccount();
   const ann=CONF.general.announcement&&tab!=="admin"?'<section class="card announce" role="status">'+esc(CONF.general.announcement)+'</section>':'';
   app.innerHTML=ann+(isGuest()&&!["account","plans"].includes(tab)?guestBanner(tab!=="workout"):'')+v;
-  fitText(app);
+  fitText(app);syncUrl();
   document.querySelectorAll("nav button").forEach(b=>{b.classList.toggle("on",b.dataset.tab===tab);b.setAttribute("aria-current",b.dataset.tab===tab?"page":"false")});
   ro.disconnect();const f=document.getElementById("fig");if(f){ro.observe(f);drawChart()}
   msgText="";
@@ -657,7 +657,16 @@ const navState=()=>NAV.state||{};
 function navPush(extra){try{NAV.pushState(Object.assign({tab},extra||{}),"")}catch(e){}}
 function navReplace(st){try{NAV.replaceState(st,"")}catch(e){}}
 function navPopIf(key,val){if(navState()[key]===val){skipPop++;NAV.back()}}
-try{NAV.replaceState({tab:"workout",root:1},"")}catch(e){}
+/* Keep the current screen in the address (#progress, #admin/users …) so a refresh reopens it. */
+const TABS=["workout","progress","history","leaderboard","account","plans","invite","admin"];
+let bootAdmSub="";
+{const h0=decodeURIComponent(location.hash.slice(1)).split("/");if(TABS.includes(h0[0])){tab=h0[0];bootAdmSub=h0[1]||""}}
+try{NAV.replaceState({tab,root:1},"")}catch(e){}
+function syncUrl(){
+  let sub="";if(tab==="admin")try{sub="/"+admSub}catch(e){}
+  const want=tab==="workout"?"":"#"+tab+sub;
+  if(location.hash!==want)try{NAV.replaceState(NAV.state,"",want||location.pathname+location.search)}catch(e){}
+}
 addEventListener("popstate",e=>{
   if(skipPop){skipPop--;return}
   const st=e.state||{},sh=document.getElementById("share"),z=document.getElementById("zoom"),ce=document.getElementById("cele");
@@ -1062,7 +1071,7 @@ function mergeGuest(){
 }
 function handleSession(u){
   ready=true;
-  if(!u){if(isGuest()){render();return}if(guestFlag()){enterGuest();return}if(user){user=null;S=blank()}render();return}
+  if(!u){if(isGuest()){render();return}if(guestFlag()){enterGuest(true);return}if(user){user=null;S=blank()}render();return}
   if(user&&user.id===u.id){if(!user.providers||!user.providers.length){user.providers=u.providers||[];user.phone=u.phone||user.phone}user.emailVerified=user.emailVerified||!!u.verified;return}
   user={id:u.id,email:u.email||"",name:u.name||pendingName||"",phone:u.phone||"",providers:u.providers||[],emailVerified:!!u.verified,photoURL:u.photoURL||""};pendingName="";
   authOpen=false;
@@ -1293,6 +1302,7 @@ function shareInvite(){
 /* ---------- Admin ---------- */
 let admSort="seen",admSub="pricing",admMsg={},admCoupons=null,admUsers=null,admLoaded={},admBusy=false,admQ="";
 const ADM_TABS=[["pricing","Pricing"],["offers","Offers"],["coupons","Coupons"],["referrals","Referrals"],["users","Users"],["general","General"]];
+if(ADM_TABS.some(t=>t[0]===bootAdmSub))admSub=bootAdmSub;
 const sw=(name,on,label,note)=>'<label class="swrow"><span><b>'+label+'</b>'+(note?'<small>'+note+'</small>':'')+'</span><span class="sw"><input type="checkbox" name="'+name+'"'+(on?" checked":"")+'><i></i></span></label>';
 const fnum=(name,val,label,attrs)=>'<label class="fl">'+label+'</label><input type="number" inputmode="decimal" name="'+name+'" value="'+esc(String(val))+'" '+(attrs||"")+'>';
 const amsg=k=>'<p class="msg'+(admMsg[k]&&admMsg[k].ok?' okmsg':'')+'">'+esc(admMsg[k]?admMsg[k].t:"")+'</p>';
@@ -1433,7 +1443,7 @@ app.addEventListener("input",e=>{if(e.target.id==="admQ"){admQ=e.target.value;co
 
 const FIREBASE_SDK="12.19.0";
 async function boot(){
-  if(guestFlag()){ready=true;enterGuest()}
+  if(guestFlag()){ready=true;enterGuest(true)}
   const fc=CFG.firebase||{};
   if(!fc.apiKey||!fc.projectId||/YOUR[-_]/i.test(JSON.stringify(fc))){bootError="Open config.js and paste your Firebase web app config, then upload the files again.";render();return}
   try{
@@ -1442,7 +1452,7 @@ async function boot(){
     FB=Object.assign({},A,Au,F);
   }catch(e){
     let last=null;try{last=JSON.parse(localStorage.getItem(LAST)||"null")}catch(e2){}
-    if(guestFlag()){ready=true;enterGuest();return}
+    if(guestFlag()){ready=true;enterGuest(true);return}
     if(last&&last.id){ready=true;user=last;loadCache();setSync("offline");render();
       addEventListener("online",()=>location.reload(),{once:true});return}
     bootError="Couldn’t load the sign-in library. Check your internet connection and reload the app.";render();return;

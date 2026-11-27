@@ -18,6 +18,8 @@ A gym workout tracker: pick a body part, choose an exercise, log each set's weig
 - Start and end photos for every exercise, with step-by-step instructions and muscles worked — tap the photo for the full How-to
 - Three themes (Daanav Red, Iron, Chalk), saved to your account
 - An animated celebration when you finish a workout
+- Share your finished workout as an Instagram or WhatsApp story image
+- Try the app without an account (workouts stay on the phone, and move into your account when you sign up)
 
 ## Files
 | File | What it does |

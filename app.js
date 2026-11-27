@@ -1,6 +1,10 @@
 {
 const CFG=window.DAANAV_CONFIG||{};
-const LAST="daanav-last-user";
+const LAST="daanav-last-user",GUEST="daanav-guest";
+let authOpen=false;
+const isGuest=()=>!!(user&&user.guest);
+function guestFlag(){try{return localStorage.getItem(GUEST)==="1"}catch(e){return false}}
+function enterGuest(){try{localStorage.setItem(GUEST,"1")}catch(e){}user={id:"guest",guest:true,name:"",email:"",providers:[]};authOpen=false;authMsg="";tab="workout";loadCache();setSync("idle");render();window.scrollTo(0,0)}
 const LIB={
   Chest:["Bench press","Incline bench press","Dumbbell bench press","Incline dumbbell press","Machine chest press","Chest fly (machine)","Cable crossover","Push-ups","Dips"],
   Back:["Deadlift","Pull-ups","Lat pulldown","Barbell row","Seated cable row","Dumbbell row","T-bar row","Face pull"],
@@ -60,7 +64,7 @@ const hasPending=()=>Object.keys(S.pending.up).length+Object.keys(S.pending.del)
 function markUp(id){S.pending.up[id]=++ver;delete S.pending.del[id];queue()}
 function markDel(id){delete S.pending.up[id];S.pending.del[id]=1;queue()}
 function markState(){S.pending.state=++ver;queue()}
-function queue(){save();setSync(navigator.onLine?"saving":"offline");clearTimeout(flushTimer);flushTimer=setTimeout(flush,700)}
+function queue(){save();if(isGuest())return;setSync(navigator.onLine?"saving":"offline");clearTimeout(flushTimer);flushTimer=setTimeout(flush,700)}
 
 /* ---------- Cloud sync (Firebase Cloud Firestore) ----------
    Data layout:  users/{uid}/workouts/{workoutId}   one document per finished workout
@@ -74,7 +78,7 @@ const wDoc=id=>FB.doc(fdb,"users",user.id,"workouts",id);
 const stateRef=()=>FB.doc(fdb,"users",user.id,"meta","state");
 const timeout=(p,ms)=>Promise.race([p,new Promise((_,j)=>setTimeout(()=>j(new Error("the server took too long to answer")),ms||15000))]);
 async function flush(){
-  if(!fdb||!user||flushing)return;
+  if(!fdb||!user||isGuest()||flushing)return;
   if(!hasPending()){setSync("synced");return}
   if(!navigator.onLine){setSync("offline");return}
   flushing=true;setSync("saving");
@@ -94,7 +98,7 @@ async function flush(){
   }catch(e){flushing=false;save();syncErr=errText(e);setSync(navigator.onLine?"error":"offline")}
 }
 async function pull(){
-  if(!fdb||!user||!navigator.onLine)return;
+  if(!fdb||!user||isGuest()||!navigator.onLine)return;
   try{
     const[qs,st]=await timeout(Promise.all([FB.getDocs(wCol()),FB.getDoc(stateRef())]));
     const local=new Map(S.workouts.map(w=>[w.id,w]));
@@ -157,7 +161,7 @@ function viewWorkout(){
       '<button class="chip'+(ld===yest?" on":"")+'" role="radio" aria-checked="'+(ld===yest)+'" data-logdate="'+yest+'">Yesterday</button>'+
       '<label class="chip datepick'+(ld&&ld!==yest?" on":"")+'"><span>'+(ld&&ld!==yest?esc(short(ld)):"Earlier date")+'</span><input type="date" id="logDateIn" max="'+yest+'" min="2015-01-01" value="'+(ld||"")+'" aria-label="Pick an earlier date"></label></div>'+
       (ld?'<p class="pastnote">Logging for <b>'+esc(long(ld))+'</b>.</p><div class="durrow"><label for="pastMinsIn">How long was it?</label><span><input type="number" id="pastMinsIn" inputmode="numeric" min="5" max="300" step="5" value="'+pastMins+'"> min</span></div>':'')+'</section>';
-    return (user.name?'':nameCard(true))+dateCard+'<section class="card"><h2>Pick a body part</h2><p class="sub">You can add more body parts once you’ve started.</p><div class="parts">'+
+    return (user.name||isGuest()?'':nameCard(true))+dateCard+'<section class="card"><h2>Pick a body part</h2><p class="sub">You can add more body parts once you’ve started.</p><div class="parts">'+
       PARTS.map(p=>'<button class="part" data-start="'+p+'"><b>'+p+'</b><small>'+lastTrained(p)+'</small></button>').join("")+
       '</div></section><section class="card"><h3>This week</h3><div class="tiles">'+tile("Workouts",ws.length)+tile("Volume",fmt(ws.reduce((a,w)=>a+volOf(w),0))+" kg")+'</div></section>';
   }
@@ -333,7 +337,26 @@ function nameCard(prompt){
     '<button class="btn" type="submit" style="flex:0 0 auto">Save</button></div></form><p class="msg">'+esc(acctMsg.name||"")+'</p>'+
     (prompt?'':'<p class="sub" style="margin:10px 0 0">Email: <b>'+esc(user.email||"")+'</b></p>')+'</section>';
 }
+const SIGNOUT_ICON='<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5"/><path d="M5 12h11"/></svg>';
+function guestBanner(compact){
+  return '<section class="card guestnote'+(compact?' compact':'')+'"><div class="gn-t"><b>You’re trying Daanav</b><small>Workouts are saved only on this phone. Sign up free to keep your progress safe and track it on any device.</small></div>'+
+    '<button class="btn gn-b" data-act="guestsignup">Sign up free</button></section>';
+}
+function viewGuestAccount(){
+  setHead("Account","Trying without an account");
+  const n=S.workouts.length;
+  let h='<section class="card guestnote big"><div class="gn-t"><b>Sign up free to monitor your progress properly</b><small>Right now '+(n?n+' workout'+(n===1?' is':'s are'):'everything is')+' saved only on this phone. Clearing Safari data or losing the phone loses it. Create a free account and your workouts so far move into it automatically.</small></div>'+
+    '<button class="btn wide" data-act="guestsignup">Create free account</button><button class="link" data-act="guestsignin" style="margin-top:6px">I already have an account · Sign in</button></section>';
+  const ct=curTheme();
+  h+='<section class="card"><h3>Theme</h3><div class="themes" role="radiogroup" aria-label="App theme">'+THEMES.map(t=>
+    '<button class="theme" role="radio" aria-checked="'+(t.id===ct)+'" data-themepick="'+t.id+'"><span class="sw" style="background:'+t.bg+';color:'+t.fg+';font:'+t.font+'">Aa</span>'+
+    '<span><b>'+t.name+(t.id==="red"?' <small style="display:inline;font-weight:600">· default</small>':'')+'</b><small>'+t.desc+'</small></span>'+
+    '<span class="tick" aria-hidden="true">'+(t.id===ct?'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>':'')+'</span></button>').join("")+'</div></section>';
+  h+='<section class="card"><button class="btn danger wide" data-act="guestexit">'+SIGNOUT_ICON+'Leave trial mode</button><p class="sub" style="margin:10px 0 0">Your trial workouts stay on this phone and come back if you try again or sign up.</p></section>';
+  return h;
+}
 function viewAccount(){
+  if(isGuest())return viewGuestAccount();
   setHead("Account",user.name||"Your account");
   const pv=user.providers||[],pw=pv.includes("password");
   const via=pw?"Email and password":pv.includes("google.com")?"Google":pv.includes("phone")?"Phone number":"Email and password";
@@ -356,7 +379,7 @@ function viewAccount(){
       '<button class="btn wide" type="submit" style="margin-top:14px"'+(acctBusy?" disabled":"")+'>'+(acctBusy?"Please wait…":"Change password")+'</button></form>'+
       '<p class="msg">'+esc(acctMsg.pw||"")+'</p><button class="link" data-act="resetmail" style="margin-top:6px">Forgot it? Email me a reset link</button><p class="msg">'+esc(acctMsg.reset||"")+'</p></section>';
   }
-  h+='<section class="card"><button class="btn ghost wide" data-act="signout">Sign out</button>'+
+  h+='<section class="card"><button class="btn danger wide" data-act="signout">'+SIGNOUT_ICON+'Sign out</button>'+
     (hasPending()?'<p class="sub" style="margin:10px 0 0">Some changes are still waiting to sync. Daanav will try to save them before you sign out.</p>':'')+'</section>';
   acctMsg={};acctDraft=null;
   return h;
@@ -400,7 +423,7 @@ async function sendReset(email){
   try{await FB.sendPasswordResetEmail(fbAuth,email,{url:location.origin+location.pathname})}
   catch(e){if(/continue-uri|unauthorized-domain/.test(e&&e.code||""))await FB.sendPasswordResetEmail(fbAuth,email);else throw e}
 }
-function saveLast(){try{localStorage.setItem(LAST,JSON.stringify(user))}catch(e){}}
+function saveLast(){if(isGuest())return;try{localStorage.setItem(LAST,JSON.stringify(user))}catch(e){}}
 
 /* ---------- Undo toast ---------- */
 let undoFn=null,toastTimer=null;
@@ -430,6 +453,8 @@ function viewAuth(){
   h+='<div class="authlinks">'+
     (authMode==="signin"?'<button class="link" data-auth="signup">New here? Create an account</button><button class="link" data-auth="forgot">Forgot password?</button>':'')+
     (authMode==="signup"||authMode==="forgot"?'<button class="link" data-auth="signin">Back to sign in</button>':'')+'</div></section>';
+  if(isGuest())h+='<section class="card tryapp"><button class="btn ghost wide" data-act="guestback">← Back to the app</button><p class="sub" style="margin:10px 0 0">Your trial workouts move into your account when you sign up or sign in.</p></section>';
+  else if(authMode!=="forgot")h+='<section class="card tryapp"><b>Just want to look around?</b><p class="sub">Try Daanav without an account. Your workouts stay on this phone, and you can sign up any time to keep them.</p><button class="btn ghost wide" data-act="guesttry">Try without signing up</button></section>';
   return h;
 }
 async function googleSignIn(){
@@ -489,13 +514,13 @@ function friendly(e){
 }
 
 function render(){
-  const signedIn=!!user&&authMode!=="reset";
+  const signedIn=!!user&&authMode!=="reset"&&!(isGuest()&&authOpen);
   document.body.classList.toggle("noauth",!signedIn);
   setSync(syncState);
   document.getElementById("hello").textContent=signedIn&&firstName()?"Hi, "+firstName():"";
   if(!signedIn){app.innerHTML=viewAuth();return}
   const v=tab==="workout"?viewWorkout():tab==="progress"?viewProgress():tab==="history"?viewHistory():viewAccount();
-  app.innerHTML=v;
+  app.innerHTML=(isGuest()&&tab!=="account"?guestBanner(tab!=="workout"):'')+v;
   fitText(app);
   document.querySelectorAll("nav button").forEach(b=>{b.classList.toggle("on",b.dataset.tab===tab);b.setAttribute("aria-current",b.dataset.tab===tab?"page":"false")});
   ro.disconnect();const f=document.getElementById("fig");if(f){ro.observe(f);drawChart()}
@@ -593,7 +618,7 @@ function showCele(){
     '<div class="stat hot up1 d3"><span>New PRs</span><b data-to="'+d.prs.length+'">0</b></div></div>'+
     (d.prs.length?'<div class="prs up1 d4">'+d.prs.slice(0,3).map(p=>'<div><span>'+esc(p.name)+'</span><b>'+wl(p.w)+' × '+p.r+' · +'+kg(p.delta)+' kg</b></div>').join("")+'</div>':'')+
     '<div class="week up1 d5">'+(d.week===1?"1st":d.week===2?"2nd":d.week===3?"3rd":d.week+"th")+' workout '+(d.past&&weekOf(d.date)!==weekOf(dkey(new Date()))?"that week":"this week")+dots+'</div>'+
-    '<div class="acts up1 d5"><button class="btn wide" data-cele="done">Done</button><button class="link" data-cele="replay">Replay celebration</button></div></div>';
+    '<div class="acts up1 d5"><button class="btn wide sharebtn" data-cele="share">'+SHARE_ICON+'Share to your story</button><button class="btn wide ghostc" data-cele="done">Done</button><button class="link" data-cele="replay">Replay celebration</button></div></div>';
   el.hidden=false;document.body.classList.add("celebrating");el.scrollTop=0;
   el.setAttribute("aria-labelledby","celeTitle");
   const still=matchMedia("(prefers-reduced-motion: reduce)").matches,nums=[...el.querySelectorAll("[data-to]")],t0=performance.now()+700;
@@ -605,7 +630,86 @@ function showCele(){
   setTimeout(()=>{const b=el.querySelector('[data-cele="done"]');if(b)b.focus({preventScroll:true})},1600);
 }
 function closeCele(){const el=document.getElementById("cele");el.hidden=true;el.innerHTML="";document.body.classList.remove("celebrating");cancelAnimationFrame(celeRaf);go("workout")}
-document.getElementById("cele").addEventListener("click",e=>{const b=e.target.closest("[data-cele]");if(!b)return;if(b.dataset.cele==="done")closeCele();else{celeRun++;showCele()}});
+document.getElementById("cele").addEventListener("click",e=>{const b=e.target.closest("[data-cele]");if(!b)return;if(b.dataset.cele==="done")closeCele();else if(b.dataset.cele==="share")openShare();else{celeRun++;showCele()}});
+
+/* ---------- Share workout as an Instagram / WhatsApp story image ---------- */
+const APP_URL="aggvishal.github.io/daanav";
+const SHARE_ICON='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>';
+let shareBlob=null,shareUrl="";
+const STORY={
+  red:{bg:["#3A0A12","#140A0C"],ink:"#FFFFFF",mute:"rgba(255,255,255,.62)",acc:"#E11D2E",accInk:"#FFFFFF",hot:"#F5B83D",hotInk:"#3A2300",card:"rgba(255,255,255,.07)",line:"rgba(255,255,255,.12)",disp:"800 {s}px 'Barlow Condensed',sans-serif",h:["DAANAV","UNLEASHED"]},
+  iron:{bg:["#1A1A20","#0E0E11"],ink:"#F4F1EC",mute:"rgba(244,241,236,.6)",acc:"#FF5A1F",accInk:"#0E0E11",hot:"#FFB020",hotInk:"#0E0E11",card:"rgba(255,255,255,.06)",line:"rgba(255,255,255,.1)",disp:"400 {s}px Anton,Impact,sans-serif",h:["BEAST","MODE."]},
+  chalk:{bg:["#D4FF3A","#C6F22A"],ink:"#0B0B0B",mute:"rgba(11,11,11,.6)",acc:"#0B0B0B",accInk:"#D4FF3A",hot:"#0B0B0B",hotInk:"#D4FF3A",card:"rgba(11,11,11,.07)",line:"rgba(11,11,11,.14)",disp:"900 {s}px Archivo,sans-serif",h:["SESSION","CRUSHED."]}};
+function rrect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
+function fitFont(c,txt,tpl,size,max){let s=size;c.font=tpl.replace("{s}",s);while(s>20&&c.measureText(txt).width>max){s-=2;c.font=tpl.replace("{s}",s)}return s}
+async function drawStory(d){
+  const t=curTheme(),P=STORY[t],W=1080,H=1920,BODY="{s}px Inter,Barlow,sans-serif";
+  try{if(document.fonts){await Promise.all([document.fonts.load(P.disp.replace("{s}",100)),document.fonts.load("600 40px Inter"),document.fonts.load("800 40px Inter")])}}catch(e){}
+  const cv=document.createElement("canvas");cv.width=W;cv.height=H;const c=cv.getContext("2d");
+  const g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,P.bg[0]);g.addColorStop(1,P.bg[1]);c.fillStyle=g;c.fillRect(0,0,W,H);
+  // diagonal accent stripes
+  c.save();c.globalAlpha=t==="chalk"?.08:.18;c.fillStyle=t==="chalk"?"#0B0B0B":P.acc;
+  for(let i=0;i<4;i++){c.beginPath();c.moveTo(W-420+i*110,0);c.lineTo(W-360+i*110,0);c.lineTo(W+40+i*110,520);c.lineTo(W-20+i*110,520);c.closePath();c.fill()}
+  c.restore();
+  const X=80,IW=W-160;c.textBaseline="alphabetic";
+  // brand row
+  c.fillStyle=P.acc;rrect(c,X,250,64,64,16);c.fill();
+  c.strokeStyle=P.accInk;c.lineWidth=6;c.lineCap="round";c.beginPath();
+  [[X+18,268,X+18,296],[X+46,268,X+46,296],[X+10,276,X+10,288],[X+54,276,X+54,288],[X+18,282,X+46,282]].forEach(a=>{c.moveTo(a[0],a[1]);c.lineTo(a[2],a[3])});c.stroke();
+  c.fillStyle=P.ink;c.font=P.disp.replace("{s}",54);c.fillText("DAANAV",X+86,302);
+  c.fillStyle=P.mute;c.font="600 "+BODY.replace("{s}",32);c.textAlign="right";c.fillText(long(d.date).toUpperCase(),X+IW,298);c.textAlign="left";
+  // kicker + headline
+  c.fillStyle=t==="chalk"?P.ink:P.hot;c.font="800 "+BODY.replace("{s}",36);
+  const kick=(d.parts.join(" + ")+" DAY").toUpperCase();fitFont(c,kick,"800 "+BODY,36,IW);c.fillText(kick,X,430);
+  c.fillStyle=P.ink;
+  const hs=Math.min(fitFont(c,P.h[0],P.disp,t==="iron"?170:190,IW),fitFont(c,P.h[1],P.disp,t==="iron"?170:190,IW));c.font=P.disp.replace("{s}",hs);
+  c.fillText(P.h[0],X,430+hs*.98);c.fillStyle=t==="chalk"?P.ink:P.acc;c.fillText(P.h[1],X,430+hs*1.9);
+  // stats grid
+  let y=430+hs*1.9+70;const cw=(IW-30)/2,ch=200;
+  const stats=[["TOTAL LIFTED",fmt(d.vol),"kg"],["SETS",String(d.sets),""],["TIME",String(d.mins),"min"],["NEW PRs",String(d.prs.length),""]];
+  stats.forEach((st,i)=>{const sx=X+(i%2)*(cw+30),sy=y+Math.floor(i/2)*(ch+30),hot=i===3&&d.prs.length;
+    c.fillStyle=hot?P.hot:P.card;rrect(c,sx,sy,cw,ch,32);c.fill();
+    c.fillStyle=hot?P.hotInk:P.mute;c.font="700 "+BODY.replace("{s}",28);c.fillText(st[0],sx+34,sy+56);
+    c.fillStyle=hot?P.hotInk:P.ink;const ns=fitFont(c,st[1],P.disp,104,cw-68-(st[2]?c.measureText(" "+st[2]).width+40:0));c.font=P.disp.replace("{s}",ns);c.fillText(st[1],sx+34,sy+166);
+    if(st[2]){const nw=c.measureText(st[1]).width;c.font="700 "+BODY.replace("{s}",34);c.fillStyle=hot?P.hotInk:P.mute;c.fillText(st[2],sx+34+nw+12,sy+166)}});
+  y+=ch*2+30+100;
+  // exercises / PRs
+  const prN=new Set(d.prs.map(p=>p.name)),rows=(d.ex||[]).slice().sort((a,b)=>prN.has(b.name)-prN.has(a.name)).slice(0,4);
+  const maxY=1475;
+  rows.forEach(r=>{if(y>maxY)return;
+    c.strokeStyle=P.line;c.lineWidth=2;c.beginPath();c.moveTo(X,y-58);c.lineTo(X+IW,y-58);c.stroke();
+    const right=(r.w?kg(r.w)+" kg":"BW")+" × "+r.r;c.font="800 "+BODY.replace("{s}",40);const rw=c.measureText(right).width;
+    let lx=X;if(prN.has(r.name)){c.fillStyle=P.hot;rrect(c,X,y-36,76,46,23);c.fill();c.fillStyle=P.hotInk;c.font="800 "+BODY.replace("{s}",26);c.fillText("PR",X+21,y-4);lx=X+94}
+    c.fillStyle=P.ink;fitFont(c,r.name,"700 "+BODY,40,IW-rw-(lx-X)-30);c.fillText(r.name,lx,y);
+    c.font="800 "+BODY.replace("{s}",40);c.textAlign="right";c.fillStyle=t==="chalk"?P.ink:P.acc;c.fillText(right,X+IW,y);c.textAlign="left";y+=86});
+  // promo footer (kept above the bottom ~250px Instagram covers)
+  const py=1530;c.fillStyle=P.acc;rrect(c,X,py,IW,150,36);c.fill();
+  c.fillStyle=P.accInk;c.font="800 "+BODY.replace("{s}",40);fitFont(c,"Track your gym progress — free","800 "+BODY,40,IW-80);c.fillText("Track your gym progress — free",X+40,py+64);
+  c.globalAlpha=.85;c.font="600 "+BODY.replace("{s}",36);c.fillText(APP_URL,X+40,py+118);c.globalAlpha=1;
+  return new Promise(r=>cv.toBlob(r,"image/png"));
+}
+async function openShare(){
+  const ov=document.getElementById("share");
+  ov.innerHTML='<div class="sh-card"><p class="sh-load">Making your story…</p></div>';ov.hidden=false;
+  shareBlob=null;try{shareBlob=await drawStory(celeData)}catch(e){}
+  if(!shareBlob){ov.innerHTML='<div class="sh-card"><p>Couldn’t make the image on this device.</p><button class="btn wide" data-sh="close">Close</button></div>';return}
+  if(shareUrl)URL.revokeObjectURL(shareUrl);shareUrl=URL.createObjectURL(shareBlob);
+  const f=new File([shareBlob],"daanav-workout.png",{type:"image/png"});
+  const can=!!(navigator.canShare&&navigator.canShare({files:[f]}));
+  ov.innerHTML='<div class="sh-card"><img class="sh-img" src="'+shareUrl+'" alt="Your workout story image"><p class="sh-tip">'+(can?'Tap <b>Share</b>, then pick <b>Instagram</b> → Stories, or <b>WhatsApp</b> → My status.':'Save the image, then add it to your Instagram or WhatsApp story.')+'</p>'+
+    (can?'<button class="btn wide sharebtn" data-sh="go">'+SHARE_ICON+'Share</button>':'')+
+    '<a class="btn wide '+(can?'ghostc':'sharebtn')+'" data-sh="save" href="'+shareUrl+'" download="daanav-workout.png">Save image</a>'+
+    '<button class="link" data-sh="close">Close</button></div>';
+}
+document.getElementById("share").addEventListener("click",e=>{
+  const ov=e.currentTarget,b=e.target.closest("[data-sh]");
+  if(!b){if(e.target===ov)ov.hidden=true;return}
+  if(b.dataset.sh==="close"){ov.hidden=true;return}
+  if(b.dataset.sh==="go"&&shareBlob){
+    const f=new File([shareBlob],"daanav-workout.png",{type:"image/png"});
+    navigator.share({files:[f],title:"My Daanav workout"}).then(()=>{ov.hidden=true}).catch(()=>{});
+  }
+});
 
 function finish(){
   const A=S.active;cleanActive();
@@ -620,7 +724,7 @@ function finish(){
   const wk=weekOf(w.date),inWeek=S.workouts.filter(x=>weekOf(x.date)===wk),days=[0,0,0,0,0,0,0];
   inWeek.forEach(x=>{days[(parse(x.date).getDay()+6)%7]=1});
   markUp(w.id);markState();
-  celebrate({past:!!A.past,date:w.date,vol:volOf(w),sets:allSets(w).length,mins:Math.max(1,Math.round((w.end-(w.start||w.end))/60000)),prs:prDetail,parts:w.parts,week:inWeek.length,days,dayName:parse(w.date).toLocaleDateString(undefined,{weekday:"long"})});
+  celebrate({past:!!A.past,date:w.date,vol:volOf(w),sets:allSets(w).length,mins:Math.max(1,Math.round((w.end-(w.start||w.end))/60000)),prs:prDetail,parts:w.parts,week:inWeek.length,days,ex:w.ex.map(e=>{const t=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);return{name:e.name,w:t.w,r:t.r,n:e.sets.length}}),dayName:parse(w.date).toLocaleDateString(undefined,{weekday:"long"})});
   render();
 }
 app.addEventListener("click",e=>{
@@ -656,6 +760,11 @@ app.addEventListener("click",e=>{
       toast("Workout discarded",()=>{if(!S.active){S.active=prev;markState();render()}});break}
     case"syncnow":setSync("saving");syncNow();break;
     case"signout":signOut();break;
+    case"guesttry":enterGuest();break;
+    case"guestsignup":authOpen=true;authMode="signup";authMsg="";render();window.scrollTo(0,0);break;
+    case"guestsignin":authOpen=true;authMode="signin";authMsg="";render();window.scrollTo(0,0);break;
+    case"guestback":authOpen=false;authMsg="";render();window.scrollTo(0,0);break;
+    case"guestexit":try{localStorage.removeItem(GUEST)}catch(e){}user=null;S=blank();tab="workout";authOpen=false;authMode="signin";authMsg="";render();window.scrollTo(0,0);break;
     case"logpast":
       if(S.active){go("workout");toast("Finish or discard your current workout first",null);break}
       logDate=dkey(new Date(Date.now()-864e5));go("workout");break;
@@ -701,17 +810,34 @@ async function signOut(){
   user=null;S=blank();tab="workout";summary=null;authMode="signin";authMsg="You’ve signed out.";setSync("idle");render();
   try{if(fbAuth)await FB.signOut(fbAuth)}catch(e){}
 }
+/* Move workouts logged in trial mode into the account the person just signed up / in with. */
+function mergeGuest(){
+  let g=null;try{g=JSON.parse(localStorage.getItem("daanav-v1:guest")||"null")}catch(e){}
+  try{localStorage.removeItem(GUEST)}catch(e){}
+  if(!g||!Array.isArray(g.workouts))return;
+  let moved=0;
+  for(const w of g.workouts)if(w&&w.id&&!S.workouts.some(x=>x.id===w.id)){S.workouts.push(w);S.pending.up[w.id]=++ver;moved++}
+  let st=false;
+  if(g.custom)for(const k of Object.keys(g.custom)){const add=(g.custom[k]||[]).filter(x=>!((S.custom[k]||[]).includes(x)));if(add.length){S.custom[k]=(S.custom[k]||[]).concat(add);st=true}}
+  if(g.active&&!S.active){S.active=g.active;st=true}
+  if(st)S.pending.state=++ver;
+  save();
+  try{localStorage.removeItem("daanav-v1:guest")}catch(e){}
+  if(moved)setTimeout(()=>toast(moved+" trial workout"+(moved===1?"":"s")+" added to your account",null),300);
+}
 function handleSession(u){
   ready=true;
-  if(!u){if(user){user=null;S=blank()}render();return}
+  if(!u){if(isGuest()){render();return}if(guestFlag()){enterGuest();return}if(user){user=null;S=blank()}render();return}
   if(user&&user.id===u.id){if(!user.providers||!user.providers.length){user.providers=u.providers||[];user.phone=u.phone||user.phone}return}
   user={id:u.id,email:u.email||"",name:u.name||pendingName||"",phone:u.phone||"",providers:u.providers||[]};pendingName="";
+  authOpen=false;
   saveLast();
-  loadCache();authMsg="";render();
+  loadCache();mergeGuest();authMsg="";render();
   syncNow();
 }
 const FIREBASE_SDK="12.19.0";
 async function boot(){
+  if(guestFlag()){ready=true;enterGuest()}
   const fc=CFG.firebase||{};
   if(!fc.apiKey||!fc.projectId||/YOUR[-_]/i.test(JSON.stringify(fc))){bootError="Open config.js and paste your Firebase web app config, then upload the files again.";render();return}
   try{
@@ -720,6 +846,7 @@ async function boot(){
     FB=Object.assign({},A,Au,F);
   }catch(e){
     let last=null;try{last=JSON.parse(localStorage.getItem(LAST)||"null")}catch(e2){}
+    if(guestFlag()){ready=true;enterGuest();return}
     if(last&&last.id){ready=true;user=last;loadCache();setSync("offline");render();
       addEventListener("online",()=>location.reload(),{once:true});return}
     bootError="Couldn’t load the sign-in library. Check your internet connection and reload the app.";render();return;
@@ -735,3 +862,7 @@ async function boot(){
 if("serviceWorker" in navigator&&location.protocol==="https:")navigator.serviceWorker.register("sw.js").catch(()=>{});
 boot();
 }
+
+// Stop iOS double-tap / pinch zoom so quick taps on +/- just change the value.
+document.addEventListener("dblclick", e => e.preventDefault(), { passive: false });
+document.addEventListener("gesturestart", e => e.preventDefault(), { passive: false });

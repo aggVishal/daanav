@@ -7,6 +7,7 @@ rules_version = '2';
 //   users/{uid}                        small profile (name, email, joined, referral code)
 //   users/{uid}/workouts/{workoutId}   one document per finished workout
 //   users/{uid}/meta/state             custom exercises + workout in progress
+//   users/{uid}/photos/{workoutId}     post-workout photo (resized JPEG)
 //   config/app                         pricing, offer, referrals, general settings (Admin)
 //   coupons/{CODE}                     coupon codes (Admin)
 //   leaderboard/{uid}                  opt-in weekly/monthly totals for the leaderboard
@@ -80,6 +81,14 @@ service cloud.firestore {
         && request.resource.data.date is string
         && request.resource.data.exercises is list
         && request.resource.data.parts is list;
+    }
+
+    // Post-workout photos (one small JPEG per workout).
+    match /users/{uid}/photos/{workoutId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.data is string
+        && request.resource.data.data.size() < 900000;
     }
 
     match /users/{uid}/meta/{docId} {

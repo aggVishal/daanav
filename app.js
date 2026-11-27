@@ -80,8 +80,8 @@ function queue(){save();if(isGuest())return;setSync(navigator.onLine?"saving":"o
                  users/{uid}/meta/state             custom exercises + workout in progress */
 const clean=o=>JSON.parse(JSON.stringify(o==null?null:o));
 const stamp=()=>FB.serverTimestamp();
-const toDoc=w=>Object.assign(clean({date:w.date,startedAt:Math.round(+w.start||0),endedAt:Math.round(+w.end||0),parts:w.parts||[],exercises:w.ex||[]}),{updatedAt:stamp()});
-const fromDoc=(id,d)=>({id,date:d.date,start:+d.startedAt||0,end:+d.endedAt||0,parts:Array.isArray(d.parts)?d.parts:[],ex:Array.isArray(d.exercises)?d.exercises:[]});
+const toDoc=w=>Object.assign(clean({date:w.date,startedAt:Math.round(+w.start||0),endedAt:Math.round(+w.end||0),parts:w.parts||[],exercises:w.ex||[],photo:!!w.photo}),{updatedAt:stamp()});
+const fromDoc=(id,d)=>({id,date:d.date,start:+d.startedAt||0,end:+d.endedAt||0,parts:Array.isArray(d.parts)?d.parts:[],ex:Array.isArray(d.exercises)?d.exercises:[],photo:!!d.photo});
 const wCol=()=>FB.collection(fdb,"users",user.id,"workouts");
 const wDoc=id=>FB.doc(fdb,"users",user.id,"workouts",id);
 const stateRef=()=>FB.doc(fdb,"users",user.id,"meta","state");
@@ -130,7 +130,7 @@ function errText(e){
   if(c==="unavailable"||c==="firestore/unavailable")return"the server is unavailable";
   return e&&e.message?e.message:String(e);
 }
-async function syncNow(){await flush();await pull();if(hasPending())flush()}
+async function syncNow(){retryPhotos();await flush();await pull();if(hasPending())flush()}
 function setSync(s){
   syncState=s;const el=document.getElementById("sync");if(!el)return;
   const t={synced:"Synced",saving:"Saving…",offline:"Offline · will sync",error:"Sync problem",idle:""}[s]||"";
@@ -511,6 +511,7 @@ function viewHome(){
       '<span class="act-x">'+w.ex.slice(0,open?99:3).map(e=>{const t=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);
         return '<span><i>'+esc(e.name)+(prs.includes(e.name)?' <em class="prb">PR</em>':'')+'</i><b class="num">'+(open?e.sets.map(s=>wl(s.w)+"×"+s.r).join(" · "):pl(e.sets.length,"set")+' · best '+(t.w?wl(t.w):"BW")+'×'+t.r)+'</b></span>'}).join("")+
       (!open&&w.ex.length>3?'<span class="more">+'+(w.ex.length-3)+' more</span>':'')+'</span></button>';
+    if(w.photo||open)h+='<div class="act-ph" data-phw="'+w.id+'" data-mode="'+(open?"feed":"feed-ro")+'">'+photoSlot(w.id,open?"feed":"feed-ro")+'</div>';
     if(open)h+='<div class="row act-a"><button class="btn ghost" data-delw="'+w.id+'">Delete workout</button></div>';
     h+='</section>';
   }
@@ -934,6 +935,7 @@ function showCele(){
     (d.prs.length?'<div class="prs up1 d4">'+d.prs.slice(0,3).map(p=>'<div><span>'+esc(p.name)+'</span><b>'+wl(p.w)+' × '+p.r+' · +'+kg(p.delta)+' kg</b></div>').join("")+'</div>':'')+
     '<div class="week up1 d5">'+(d.week===1?"1st":d.week===2?"2nd":d.week===3?"3rd":d.week+"th")+' workout '+(d.past&&weekOf(d.date)!==weekOf(dkey(new Date()))?"that week":"this week")+dots+'<div class="streak"><span><b>'+d.streak+'</b> week streak</span><span><b>'+d.monthDays+'</b> '+(d.monthDays===1?"day":"days")+' in '+esc(monthName(monthOf(d.date),{month:"long"}))+'</span></div></div>'+
     ((d.trophies||[]).length?'<div class="tro-won up1 d5"><span class="tw-l">Trophy unlocked</span>'+d.trophies.map(t=>'<div class="tw">'+trophyIcon(t)+'<span><b>'+esc(t.name)+'</b><small>'+esc(t.desc)+'</small></span></div>').join("")+'</div>':'')+
+    (d.id?'<div class="cele-ph up1 d5" data-phw="'+d.id+'" data-mode="cele">'+photoSlot(d.id,"cele")+'</div>':'')+
     '<div class="acts up1 d5"><button class="btn wide sharebtn" data-cele="share">'+SHARE_ICON+'Share to your story</button><button class="btn wide ghostc" data-cele="done">Done</button><button class="link" data-cele="replay">Replay celebration</button></div></div>';
   el.hidden=false;document.body.classList.add("celebrating");el.scrollTop=0;
   el.setAttribute("aria-labelledby","celeTitle");
@@ -959,9 +961,78 @@ const STORY={
 function rrect(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath()}
 function fitFont(c,txt,tpl,size,max){let s=size;c.font=tpl.replace("{s}",s);while(s>20&&c.measureText(txt).width>max){s-=2;c.font=tpl.replace("{s}",s)}return s}
 /* A story spec: {dateLabel,kicker,h:[l1,l2],stats:[[label,value,unit,hot]],ym,cal:[days],mark:[days],streak,monthDays,rowsTitle,rows:[{name,right,badge}]} */
+/* ---------- Post-workout photos ----------
+   Kept on the phone in IndexedDB (localStorage is too small for photos) and, when signed in,
+   in users/{uid}/photos/{workoutId}. They're only downloaded when a workout is shown. */
+const PH={},phLoading={};
+const phKey=wid=>(user?user.id:"x")+":"+wid;
+let idbP=null;
+function idb(){if(!idbP)idbP=new Promise((res,rej)=>{try{const r=indexedDB.open("daanav-photos",1);r.onupgradeneeded=()=>r.result.createObjectStore("p");r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}});return idbP}
+async function idbOp(mode,fn){const db=await idb();return new Promise((res,rej)=>{const tx=db.transaction("p",mode),st=tx.objectStore("p"),q=fn(st);tx.oncomplete=()=>res(q&&q.result);tx.onerror=()=>rej(tx.error)})}
+const idbGet=k=>idbOp("readonly",st=>st.get(k)).catch(()=>null);
+const idbSet=(k,v)=>idbOp("readwrite",st=>st.put(v,k)).catch(()=>null);
+const idbDel=k=>idbOp("readwrite",st=>st.delete(k)).catch(()=>null);
+const phPendKey=()=>"daanav-photo-pending:"+(user?user.id:"x");
+function phPending(){try{return JSON.parse(localStorage.getItem(phPendKey())||"{}")}catch(e){return{}}}
+function phSetPending(o){try{localStorage.setItem(phPendKey(),JSON.stringify(o))}catch(e){}}
+function workoutPhoto(w){
+  if(!w||!w.photo)return"";if(PH[w.id])return PH[w.id];
+  if(!phLoading[w.id]){phLoading[w.id]=1;(async()=>{
+    let d=await idbGet(phKey(w.id));
+    if(!d&&fdb&&user&&!isGuest()&&navigator.onLine){try{const sn=await timeout(FB.getDoc(FB.doc(fdb,"users",user.id,"photos",w.id)),12000);if(sn.exists()){d=sn.data().data;if(d)idbSet(phKey(w.id),d)}}catch(e){}}
+    if(d){PH[w.id]=d;refreshPhotos(w.id)}else phLoading[w.id]=0;
+  })()}
+  return"";
+}
+function refreshPhotos(wid){
+  document.querySelectorAll('[data-phw="'+wid+'"]').forEach(el=>{el.innerHTML=photoSlot(wid,el.dataset.mode)});
+}
+async function uploadPhoto(wid){
+  if(!fdb||!user||isGuest())return;const d=PH[wid]||await idbGet(phKey(wid)),pend=phPending();
+  if(!navigator.onLine){pend[wid]=d?1:-1;phSetPending(pend);return}
+  try{if(d)await timeout(FB.setDoc(FB.doc(fdb,"users",user.id,"photos",wid),{data:d,updatedAt:stamp()}),20000);else await timeout(FB.deleteDoc(FB.doc(fdb,"users",user.id,"photos",wid)),12000);delete pend[wid]}
+  catch(e){pend[wid]=d?1:-1}
+  phSetPending(pend);
+}
+function retryPhotos(){const p=phPending();Object.keys(p).forEach(uploadPhoto)}
+async function setWorkoutPhoto(wid,file){
+  const w=S.workouts.find(x=>x.id===wid);if(!w)return;
+  let d;try{d=await photoToStory(file)}catch(e){toast("Couldn’t use that image. Try a JPG or PNG photo.",null);return}
+  PH[wid]=d;idbSet(phKey(wid),d);if(!w.photo){w.photo=true;markUp(wid)}save();
+  refreshPhotos(wid);toast("Photo added",null);uploadPhoto(wid);
+}
+function removeWorkoutPhoto(wid){
+  const w=S.workouts.find(x=>x.id===wid);if(!w)return;
+  delete PH[wid];idbDel(phKey(wid));w.photo=false;markUp(wid);refreshPhotos(wid);toast("Photo removed",null);uploadPhoto(wid);
+}
+/* Resize keeping the shape, longest side 1080px, JPEG — about 100–250 KB. */
+function photoToStory(file){
+  return new Promise((res,rej)=>{
+    if(!file||!/^image\//.test(file.type)){rej(new Error("type"));return}
+    const url=URL.createObjectURL(file),img=new Image();
+    img.onload=()=>{const W=img.naturalWidth,H=img.naturalHeight;if(!W||!H){URL.revokeObjectURL(url);rej(new Error("size"));return}
+      const k=Math.min(1,1080/Math.max(W,H)),cv=document.createElement("canvas");cv.width=Math.round(W*k);cv.height=Math.round(H*k);
+      const c=cv.getContext("2d");c.imageSmoothingQuality="high";c.drawImage(img,0,0,cv.width,cv.height);URL.revokeObjectURL(url);
+      let q=.82,d=cv.toDataURL("image/jpeg",q);while(d.length>700000&&q>.4){q-=.1;d=cv.toDataURL("image/jpeg",q)}res(d)};
+    img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error("decode"))};img.src=url;
+  });
+}
+/* mode "cele" = celebration screen, "feed" = Home card */
+function photoSlot(wid,mode){
+  const w=S.workouts.find(x=>x.id===wid),ph=w?workoutPhoto(w):"";
+  const cam='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="4"/></svg>';
+  if(ph)return '<figure class="wph"><img src="'+esc(ph)+'" alt="Post-workout photo"></figure>'+
+    (mode==="feed-ro"?'':'<div class="wph-a"><label class="link"><input type="file" accept="image/*" data-phin="'+wid+'">Change photo</label><button class="link" type="button" data-phrm="'+wid+'">Remove</button></div>');
+  if(w&&w.photo)return '<figure class="wph loading"><span>Loading photo…</span></figure>';
+  if(mode==="feed-ro")return"";
+  return '<label class="wph-add'+(mode==="cele"?" big":"")+'"><input type="file" accept="image/*" data-phin="'+wid+'">'+cam+'<span><b>Add your post-workout photo</b><small>'+(mode==="cele"?"It goes on your story and your Home feed":"Show off the pump")+'</small></span></label>';
+}
+document.addEventListener("change",e=>{const t=e.target;if(t&&t.dataset&&t.dataset.phin){const f=t.files&&t.files[0];const wid=t.dataset.phin;t.value="";if(f)setWorkoutPhoto(wid,f)}});
+document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("[data-phrm]");if(b){e.stopPropagation();removeWorkoutPhoto(b.dataset.phrm)}},true);
+
 function workoutSpec(d){
   const prN=new Set(d.prs.map(p=>p.name));
-  return{dateLabel:long(d.date).toUpperCase(),kicker:(d.parts.join(" + ")+" DAY").toUpperCase(),
+  return{photo:PH[d.id]||"",dateLabel:long(d.date).toUpperCase(),kicker:(d.parts.join(" + ")+" DAY").toUpperCase(),
     stats:[["LIFTED",fmt(d.vol),"kg"],["SETS",String(d.sets),""],["TIME",String(d.mins),"min"],["PRs",String(d.prs.length),"",d.prs.length>0]],
     ym:monthOf(d.date),cal:d.cal||[],mark:[+d.date.slice(8)],streak:d.streak,monthDays:d.monthDays,
     rows:(d.trophies||[]).map(t=>({name:t.name,right:"",badge:"TROPHY"})).concat((d.ex||[]).slice().sort((a,b)=>prN.has(b.name)-prN.has(a.name)).slice(0,4).map(r=>({name:r.name,right:(r.w?kg(r.w)+" kg":"BW")+" × "+r.r,badge:prN.has(r.name)?"PR":""})))};
@@ -981,19 +1052,43 @@ async function drawStory(sp){
   [[X+18,268,X+18,296],[X+46,268,X+46,296],[X+10,276,X+10,288],[X+54,276,X+54,288],[X+18,282,X+46,282]].forEach(a=>{c.moveTo(a[0],a[1]);c.lineTo(a[2],a[3])});c.stroke();
   c.fillStyle=P.ink;c.font=P.disp.replace("{s}",54);c.fillText("DAANAV",X+86,302);
   c.fillStyle=P.mute;c.font="600 "+BODY.replace("{s}",32);c.textAlign="right";fitFont(c,sp.dateLabel,"600 "+BODY,32,IW-330);c.fillText(sp.dateLabel,X+IW,298);c.textAlign="left";
+  const HL=sp.h||P.h;let y;
+  const pim=sp.photo?await new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.onerror=()=>r(null);i.src=sp.photo}):null;
+  if(pim){
+    // post-workout photo with the headline on it
+    const py=350,ph2=760;c.save();rrect(c,X,py,IW,ph2,36);c.clip();
+    const k=Math.max(IW/pim.width,ph2/pim.height),dw=pim.width*k,dh=pim.height*k;c.drawImage(pim,X+(IW-dw)/2,py+(ph2-dh)/2,dw,dh);
+    const gg=c.createLinearGradient(0,py+ph2*.42,0,py+ph2);gg.addColorStop(0,"rgba(0,0,0,0)");gg.addColorStop(1,"rgba(0,0,0,.82)");c.fillStyle=gg;c.fillRect(X,py,IW,ph2);c.restore();
+    const hs=Math.min(fitFont(c,HL[0],P.disp,110,IW-80),fitFont(c,HL[1],P.disp,110,IW-80));
+    const by=py+ph2-44;c.font=P.disp.replace("{s}",hs);c.fillStyle=t==="chalk"?"#D4FF3A":P.acc;c.fillText(HL[1],X+40,by);c.fillStyle="#fff";c.fillText(HL[0],X+40,by-hs*.92);
+    c.fillStyle=t==="chalk"?"#D4FF3A":P.hot;fitFont(c,sp.kicker,"800 "+BODY,30,IW-80);c.fillText(sp.kicker,X+40,by-hs*1.92);
+    y=py+ph2+36;
+  }else{
   // kicker + headline
   c.fillStyle=t==="chalk"?P.ink:P.hot;fitFont(c,sp.kicker,"800 "+BODY,36,IW);c.fillText(sp.kicker,X,430);
-  const HL=sp.h||P.h;c.fillStyle=P.ink;
+  c.fillStyle=P.ink;
   const hs=Math.min(fitFont(c,HL[0],P.disp,t==="iron"?140:150,IW),fitFont(c,HL[1],P.disp,t==="iron"?140:150,IW));c.font=P.disp.replace("{s}",hs);
   c.fillText(HL[0],X,430+hs*.98);c.fillStyle=t==="chalk"?P.ink:P.acc;c.fillText(HL[1],X,430+hs*1.9);
+  y=430+hs*1.9+60;
+  }
   // stats: one row of four
-  let y=430+hs*1.9+60;const gap=20,cw=(IW-gap*3)/4,ch=170;
+  const gap=20,cw=(IW-gap*3)/4,ch=170;
   sp.stats.forEach((st,i)=>{const sx=X+i*(cw+gap),hot=!!st[3];
     c.fillStyle=hot?P.hot:P.card;rrect(c,sx,y,cw,ch,28);c.fill();
     c.fillStyle=hot?P.hotInk:P.mute;fitFont(c,st[0],"700 "+BODY,24,cw-40);c.fillText(st[0],sx+24,y+46);
     c.fillStyle=hot?P.hotInk:P.ink;const ns=fitFont(c,st[1],P.disp,80,cw-48);c.font=P.disp.replace("{s}",ns);c.fillText(st[1],sx+24,y+126);
     if(st[2]){c.fillStyle=hot?P.hotInk:P.mute;c.font="700 "+BODY.replace("{s}",24);c.fillText(st[2],sx+24,y+156)}});
   y+=ch+30;
+  if(pim){
+    // compact streak strip instead of the calendar
+    c.fillStyle=P.card;rrect(c,X,y,IW,110,28);c.fill();
+    c.fillStyle=t==="chalk"?"#0B0B0B":P.acc;rrect(c,X+24,y+23,64,64,16);c.fill();
+    c.strokeStyle=t==="chalk"?"#D4FF3A":P.accInk;c.lineWidth=5;c.lineCap="round";c.beginPath();
+    [[42,40,42,70],[70,40,70,70],[34,47,34,63],[78,47,78,63],[42,55,70,55]].forEach(q=>{c.moveTo(X+q[0],y+q[1]);c.lineTo(X+q[2],y+q[3])});c.stroke();
+    const st=sp.streak||0,line=st+(st===1?" WEEK":" WEEKS")+" STREAK";c.fillStyle=P.ink;fitFont(c,line,P.disp,48,IW-140);c.fillText(line,X+112,y+62);
+    c.fillStyle=P.mute;c.font="600 "+BODY.replace("{s}",26);c.fillText(pl(sp.monthDays||0,"day")+" trained in "+monthName(sp.ym,{month:"long"}),X+112,y+96);
+    y+=110+80;
+  }else{
   // consistency: month calendar + week streak
   const cy=y,chh=410;c.fillStyle=P.card;rrect(c,X,cy,IW,chh,32);c.fill();
   const ym=sp.ym,[yy,mm]=ym.split("-").map(Number),lead=(new Date(yy,mm-1,1).getDay()+6)%7,nd=new Date(yy,mm,0).getDate(),on=new Set(sp.cal||[]),mk=new Set(sp.mark||[]),pitch=52,cs=44,gx=X+34,gy=cy+78;
@@ -1013,6 +1108,7 @@ async function drawStory(sp){
   const dl=pl(sp.monthDays||0,"day")+" trained";c.fillStyle=P.ink;fitFont(c,dl,"800 "+BODY,38,rw);c.fillText(dl,rx,cy+300);
   c.fillStyle=P.mute;c.font="600 "+BODY.replace("{s}",28);c.fillText("in "+monthName(ym,{month:"long"}),rx,cy+342);
   y=cy+chh+80;
+  }
   // rows (exercises / strength gains)
   const maxY=1490;
   (sp.rows||[]).forEach(r=>{if(y>maxY)return;
@@ -1085,7 +1181,7 @@ function finish(){
   const wk=weekOf(w.date),inWeek=S.workouts.filter(x=>weekOf(x.date)===wk),days=[0,0,0,0,0,0,0];
   inWeek.forEach(x=>{days[(parse(x.date).getDay()+6)%7]=1});
   markUp(w.id);markState();
-  celebrate({trophies:troWon,past:!!A.past,date:w.date,vol:volOf(w),sets:allSets(w).length,mins:Math.max(1,Math.round((w.end-(w.start||w.end))/60000)),prs:prDetail,parts:w.parts,week:inWeek.length,days,streak:weekStreak(),monthDays:monthDays(monthOf(w.date)),cal:[...trainedDays()].filter(k=>k.slice(0,7)===monthOf(w.date)).map(k=>+k.slice(8)),ex:w.ex.map(e=>{const t=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);return{name:e.name,w:t.w,r:t.r,n:e.sets.length}}),dayName:parse(w.date).toLocaleDateString(undefined,{weekday:"long"})});
+  celebrate({id:w.id,trophies:troWon,past:!!A.past,date:w.date,vol:volOf(w),sets:allSets(w).length,mins:Math.max(1,Math.round((w.end-(w.start||w.end))/60000)),prs:prDetail,parts:w.parts,week:inWeek.length,days,streak:weekStreak(),monthDays:monthDays(monthOf(w.date)),cal:[...trainedDays()].filter(k=>k.slice(0,7)===monthOf(w.date)).map(k=>+k.slice(8)),ex:w.ex.map(e=>{const t=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);return{name:e.name,w:t.w,r:t.r,n:e.sets.length}}),dayName:parse(w.date).toLocaleDateString(undefined,{weekday:"long"})});
   render();
 }
 app.addEventListener("click",e=>{
@@ -1182,7 +1278,8 @@ function mergeGuest(){
   try{localStorage.removeItem(GUEST)}catch(e){}
   if(!g||!Array.isArray(g.workouts))return;
   let moved=0;
-  for(const w of g.workouts)if(w&&w.id&&!S.workouts.some(x=>x.id===w.id)){S.workouts.push(w);S.pending.up[w.id]=++ver;moved++}
+  for(const w of g.workouts)if(w&&w.id&&!S.workouts.some(x=>x.id===w.id)){S.workouts.push(w);S.pending.up[w.id]=++ver;moved++;
+    if(w.photo){const wid=w.id;idbGet("guest:"+wid).then(d=>{if(d){PH[wid]=d;idbSet(phKey(wid),d).then(()=>uploadPhoto(wid));idbDel("guest:"+wid)}})}}
   let st=false;
   if(g.custom)for(const k of Object.keys(g.custom)){const add=(g.custom[k]||[]).filter(x=>!((S.custom[k]||[]).includes(x)));if(add.length){S.custom[k]=(S.custom[k]||[]).concat(add);st=true}}
   if(g.active&&!S.active){S.active=g.active;st=true}

@@ -81,8 +81,8 @@ function queue(){save();if(isGuest())return;setSync(navigator.onLine?"saving":"o
                  users/{uid}/meta/state             custom exercises + workout in progress */
 const clean=o=>JSON.parse(JSON.stringify(o==null?null:o));
 const stamp=()=>FB.serverTimestamp();
-const toDoc=w=>Object.assign(clean({date:w.date,startedAt:Math.round(+w.start||0),endedAt:Math.round(+w.end||0),parts:w.parts||[],exercises:w.ex||[],photo:!!w.photo}),{updatedAt:stamp()});
-const fromDoc=(id,d)=>({id,date:d.date,start:+d.startedAt||0,end:+d.endedAt||0,parts:Array.isArray(d.parts)?d.parts:[],ex:Array.isArray(d.exercises)?d.exercises:[],photo:!!d.photo});
+const toDoc=w=>Object.assign(clean({date:w.date,startedAt:Math.round(+w.start||0),endedAt:Math.round(+w.end||0),parts:w.parts||[],exercises:w.ex||[],photo:!!w.photo,type:w.type||"gym",run:w.run||null}),{updatedAt:stamp()});
+const fromDoc=(id,d)=>({id,date:d.date,start:+d.startedAt||0,end:+d.endedAt||0,parts:Array.isArray(d.parts)?d.parts:[],ex:Array.isArray(d.exercises)?d.exercises:[],photo:!!d.photo,type:d.type==='run'?'run':undefined,run:d.run&&typeof d.run==='object'?{km:+d.run.km||0,mins:+d.run.mins||0}:undefined});
 const wCol=()=>FB.collection(fdb,"users",user.id,"workouts");
 const wDoc=id=>FB.doc(fdb,"users",user.id,"workouts",id);
 const stateRef=()=>FB.doc(fdb,"users",user.id,"meta","state");
@@ -170,7 +170,52 @@ function exercisesFor(part){return libFor(part).concat((S.custom[part]||[]).filt
 function setHead(k,t){document.getElementById("kicker").textContent=k;document.getElementById("title").textContent=t}
 
 /* ---------- Workout ---------- */
+/* ---------- Running (logged by hand: minutes + km) ---------- */
+const isRun=w=>!!w&&w.type==="run"&&w.run;
+const runMins=w=>isRun(w)?w.run.mins:0,runKm=w=>isRun(w)?w.run.km:0;
+function paceStr(mins,km){if(!(km>0)||!(mins>0))return"–";const p=mins/km,m=Math.floor(p),sec=Math.round((p-m)*60);return (sec===60?(m+1)+":00":m+":"+String(sec).padStart(2,"0"))}
+const kmStr=k=>(Math.round(k*100)/100).toLocaleString("en-IN",{maximumFractionDigits:2});
+let runForm=null;
+function openRunForm(w){
+  const today=dkey(new Date());
+  runForm=w?{edit:w.id,date:w.date,mins:String(w.run.mins),km:String(w.run.km),msg:""}:{date:logDate&&logDate<today?logDate:today,mins:"",km:"",msg:""};
+  if(S.active&&!w){toast("Finish or discard your current workout first.",null);runForm=null;return}
+  navPush({ex:1});go("workout",true);render();window.scrollTo(0,0);
+}
+function viewRunForm(){
+  const R=runForm,today=dkey(new Date()),yest=dkey(new Date(Date.now()-864e5)),m=parseFloat(R.mins),k=parseFloat(String(R.km).replace(",","."));
+  setHead(R.edit?"Editing run":(R.date===today?"Today":long(R.date)),R.edit?"Update your run":"Log a run");
+  let h='<section class="card datecard"><h3>Run date</h3><div class="chips">'+
+    '<button class="chip'+(R.date===today?" on":"")+'" data-rundate="'+today+'">Today</button><button class="chip'+(R.date===yest?" on":"")+'" data-rundate="'+yest+'">Yesterday</button>'+
+    '<button class="chip datepick'+(R.date!==today&&R.date!==yest?" on":"")+'" data-act="pickdate" data-for="run"><span>'+(R.date!==today&&R.date!==yest?esc(short(R.date)):"Earlier date")+'</span></button></div></section>';
+  h+='<section class="card runcard"><div class="runic">'+actIcon("run")+'</div><h2>How was your run?</h2>'+
+    '<div class="steppers"><div class="step"><label for="run-m">Time (minutes)</label><div class="ctl"><button data-runstep="mins" data-d="-1" aria-label="Less">−</button><input id="run-m" class="num" inputmode="numeric" value="'+esc(R.mins)+'" data-run="mins" placeholder="30"><button data-runstep="mins" data-d="1" aria-label="More">+</button></div></div>'+
+    '<div class="step"><label for="run-k">Distance (km)</label><div class="ctl"><button data-runstep="km" data-d="-0.5" aria-label="Less">−</button><input id="run-k" class="num" inputmode="decimal" value="'+esc(R.km)+'" data-run="km" placeholder="5"><button data-runstep="km" data-d="0.5" aria-label="More">+</button></div></div></div>'+
+    '<div class="runlive" id="runLive">'+runLive()+'</div>'+
+    '<button class="btn wide" data-act="saverun">'+(R.edit?"Save changes":"Save run")+'</button><p class="msg">'+esc(R.msg||"")+'</p>'+
+    '<button class="link" data-act="cancelrun" style="display:block;margin:6px auto 0">Cancel</button></section>';
+  return h;
+}
+function runLive(){const R=runForm,m=parseFloat(R.mins),k=parseFloat(String(R.km).replace(",","."));
+  return '<span><small>Avg pace</small><b class="num">'+paceStr(m,k)+'</b><small>min/km</small></span><span><small>Speed</small><b class="num">'+(m>0&&k>0?(Math.round(k/(m/60)*10)/10):"–")+'</b><small>km/h</small></span>'}
+function saveRun(){
+  const R=runForm,m=Math.round(parseFloat(R.mins)),k=Math.round(parseFloat(String(R.km).replace(",","."))*100)/100;
+  if(!(m>=1&&m<=1440)){R.msg="Enter how many minutes you ran.";render();return}
+  if(!(k>0&&k<=300)){R.msg="Enter the distance in km, e.g. 5 or 3.2.";render();return}
+  const today=dkey(new Date());let start;
+  if(R.edit){const o=S.workouts.find(x=>x.id===R.edit);const t=new Date(o&&o.start||parse(R.date).setHours(7,0,0,0)),d=parse(R.date);d.setHours(t.getHours(),t.getMinutes(),0,0);start=+d}
+  else start=R.date===today?Date.now()-m*60000:parse(R.date).setHours(7,0,0,0);
+  const id=R.edit||uid(),old=S.workouts.find(x=>x.id===id);
+  const w={id,date:R.date,start,end:start+m*60000,parts:["Running"],ex:[],type:"run",run:{km:k,mins:m},photo:!!(old&&old.photo)};
+  const troBefore=trophyState().earned;
+  S.workouts=S.workouts.filter(x=>x.id!==id).concat([w]);markUp(id);markState();
+  const won=R.edit?[]:newTrophies(troBefore,trophyState().earned);
+  runForm=null;logDate=null;openId=id;goRootHome();window.scrollTo(0,0);
+  toast((R.edit?"Run updated: ":"Run saved: ")+kmStr(k)+" km in "+m+" min · "+paceStr(m,k)+" /km",null);
+  if(won.length)setTimeout(()=>toast("Trophy unlocked: "+won.map(t=>t.name).join(", "),null),2600);
+}
 function viewWorkout(){
+  if(runForm&&!S.active)return viewRunForm();
   const today=dkey(new Date());
   const A=S.active;
   if(!A){
@@ -182,7 +227,8 @@ function viewWorkout(){
       '<button class="chip'+(ld===yest?" on":"")+'" role="radio" aria-checked="'+(ld===yest)+'" data-logdate="'+yest+'">Yesterday</button>'+
       '<button class="chip datepick'+(ld&&ld!==yest?" on":"")+'" data-act="pickdate" data-for="log" aria-haspopup="dialog"><span>'+(ld&&ld!==yest?esc(short(ld)):"Earlier date")+'</span></button></div>'+
       (ld?'<p class="pastnote">Logging for <b>'+esc(long(ld))+'</b>.</p><div class="durrow"><label for="pastMinsIn">How long was it?</label><span><input type="number" id="pastMinsIn" inputmode="numeric" min="5" max="300" step="5" value="'+pastMins+'"> min</span></div>':'')+'</section>';
-    return (gender()?'':genderCard())+(user.name||isGuest()?'':nameCard(true))+dateCard+'<section class="card"><h2>Pick a body part</h2><p class="sub">You can add more body parts once you’ve started.</p><div class="parts">'+
+    const runBtn='<button class="card runbtn" data-act="runform"><span class="pbi" aria-hidden="true">'+actIcon("run")+'</span><span class="pbt"><b>Log a run</b><small>Enter your time and distance</small></span><span class="go" aria-hidden="true">›</span></button>';
+    return (gender()?'':genderCard())+(user.name||isGuest()?'':nameCard(true))+dateCard+runBtn+'<section class="card"><h2>Pick a body part</h2><p class="sub">You can add more body parts once you’ve started.</p><div class="parts">'+
       partsOrder().map(p=>'<button class="part" data-start="'+p+'"><b>'+p+'</b><small>'+lastTrained(p)+'</small></button>').join("")+
       '</div></section><section class="card"><h3>This week</h3><div class="tiles">'+tile("Workouts",ws.length)+tile("Volume",fmt(ws.reduce((a,w)=>a+volOf(w),0))+" kg")+'</div></section>';
   }
@@ -300,10 +346,10 @@ function prsIn(key){
 }
 /* ---------- Consistency: calendar + week streak ---------- */
 /* Activity icons. Every workout is "gym" today; yoga, running etc. can add their own icon here. */
-const ACT_ICON={gym:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg>'};
+const ACT_ICON={run:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="14.5" cy="4.5" r="2"/><path d="M9 21l2.5-6 3 2.5V22"/><path d="M6 12.5 9 9l4 .5 2.5 3.5 3 .5"/><path d="M11.5 15 13 9.5"/></svg>',gym:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><path d="M6.5 6.5v11M17.5 6.5v11M3.5 9v6M20.5 9v6M6.5 12h11"/></svg>'};
 const actOf=w=>(w&&w.type)||"gym";
 const actIcon=t=>ACT_ICON[t]||ACT_ICON.gym;
-const dayAct=k=>{const w=S.workouts.find(x=>x.date===k);return actOf(w)};
+const dayAct=k=>{const ws=S.workouts.filter(x=>x.date===k);return ws.some(x=>!isRun(x))?"gym":ws.length?"run":"gym"};
 const trainedDays=()=>new Set(S.workouts.map(w=>w.date));
 function weekStreak(){
   const wk=new Set(S.workouts.map(w=>weekOf(w.date))),d=parse(weekOf(dkey(new Date())));
@@ -326,6 +372,15 @@ function calHtml(ym,small){
   return h+'</div>';
 }
 let calYm=null;
+function runningCard(cur){
+  const all=S.workouts.filter(isRun);if(!all.length)return"";
+  const inP=all.filter(w=>keyOf(w)===cur),km=inP.reduce((a,w)=>a+w.run.km,0),mins=inP.reduce((a,w)=>a+w.run.mins,0);
+  const longest=all.reduce((m,w)=>w.run.km>m.run.km?w:m,all[0]),okP=all.filter(w=>w.run.km>=1),fastest=okP.length?okP.reduce((m,w)=>w.run.mins/w.run.km<m.run.mins/m.run.km?w:m,okP[0]):null;
+  return '<section class="card"><h3>Running <small class="mute">· '+(period==="week"?"this week":"this month")+'</small></h3><div class="tiles">'+
+    tile("Distance",kmStr(km),'<em>km</em>')+tile("Runs",inP.length)+tile("Time",mins,'<em>min</em>')+tile("Avg pace",paceStr(mins,km),'<em>min/km</em>')+'</div>'+
+    '<div class="runbest"><span><small>Longest run</small><b class="num">'+kmStr(longest.run.km)+' km</b><small>'+short(longest.date)+'</small></span>'+
+    (fastest?'<span><small>Fastest pace</small><b class="num">'+paceStr(fastest.run.mins,fastest.run.km)+' /km</b><small>'+kmStr(fastest.run.km)+' km · '+short(fastest.date)+'</small></span>':'')+'</div></section>';
+}
 function consistencyCard(){
   const cur=monthOf(dkey(new Date()));if(!calYm||calYm>cur)calYm=cur;
   const first=S.workouts.length?sorted()[0].date.slice(0,7):cur,st=weekStreak(),md=monthDays(calYm);
@@ -380,6 +435,7 @@ function viewProgress(){
     tile("Sets",c.sets,chip(ch(c.sets,p.sets),lbl))+tile("Volume (kg)",fmt(c.vol),'<em class="note">weight × reps</em>'+chip(ch(c.vol,p.vol),lbl))+'</div>'+
     '<button class="btn wide sharebtn recapbtn" data-act="sharerecap">'+SHARE_ICON+'Share my '+(period==="week"?"week":"month")+' to story</button></section>';
   h+=consistencyCard();
+  h+=runningCard(cur);
   h+=strongerCard(cur,c);
   const names=[...new Set(sorted().flatMap(w=>w.ex.filter(e=>e.sets.length).map(e=>e.name)))].sort();
   if(!progEx||!names.includes(progEx)){const last=sorted().pop();progEx=last&&last.ex.length?last.ex[0].name:names[0]}
@@ -428,6 +484,7 @@ const ro=new ResizeObserver(drawChart);
 /* ---------- History ---------- */
 /* ---------- Trophies: "you vs you" achievements, earned from your own history ---------- */
 const TI={ // trophy glyphs (stroke icons)
+  run:'<circle cx="14.5" cy="4.5" r="2"/><path d="M9 21l2.5-6 3 2.5V22"/><path d="M6 12.5 9 9l4 .5 2.5 3.5 3 .5"/><path d="M11.5 15 13 9.5"/>',
   flame:'<path d="M12 3c1 4 5 5 5 10a5 5 0 0 1-10 0c0-3 2-4 2-7 1.5 1 3 2.5 3 5"/>',
   crown:'<path d="M4 18h16M5 18 3.5 8l5 4L12 5l3.5 7 5-4L19 18"/>',
   bolt:'<path d="M13 3 5 14h6l-1 7 8-11h-6z"/>',
@@ -476,12 +533,19 @@ const TROPHIES=[
   {id:"sarva",cat:"Variety",icon:"wheel",name:"Sarva Anga",desc:"Train 5 body parts in one week",goal:5,val:s=>s.bestWeekParts},
   {id:"astra",cat:"Variety",icon:"wheel",name:"Astra Collector",desc:"Do 20 different exercises",goal:20,val:s=>s.exCount},
   {id:"dawn",cat:"Variety",icon:"sun",name:"Brahma Muhurta",desc:"Start a workout before 7 am",goal:1,val:s=>s.early},
-  {id:"night",cat:"Variety",icon:"moon",name:"Raatri Daanav",desc:"Start a workout after 9 pm",goal:1,val:s=>s.late}
+  {id:"night",cat:"Variety",icon:"moon",name:"Raatri Daanav",desc:"Start a workout after 9 pm",goal:1,val:s=>s.late},
+  // Running
+  {id:"run1",cat:"Running",icon:"run",name:"Pehla Kadam",desc:"Log your first run",goal:1,val:s=>s.runs},
+  {id:"run5k",cat:"Running",icon:"run",name:"5K Daanav",desc:"Run 5 km in one go",goal:5,val:s=>s.longRun,unit:"km"},
+  {id:"run10k",cat:"Running",icon:"run",name:"10K Daanav",desc:"Run 10 km in one go",goal:10,val:s=>s.longRun,unit:"km"},
+  {id:"runhm",cat:"Running",icon:"crown",name:"Ardh Marathon",desc:"Run a half marathon (21.1 km)",goal:21.1,val:s=>s.longRun,unit:"km"},
+  {id:"run100",cat:"Running",icon:"mountain",name:"Shatak Kilometre",desc:"Run 100 km in total",goal:100,val:s=>Math.floor(s.runKm),unit:"km"},
+  {id:"runfast",cat:"Running",icon:"bolt",name:"Vayu Vega",desc:"Run 5 km at 5:00 /km or faster",goal:1,val:s=>s.fast5k}
 ];
 /* Replays your workouts in date order and records the day each trophy was first earned. */
 function trophyState(list){
   const ws=(list||S.workouts).slice().sort((a,b)=>a.date.localeCompare(b.date)||(a.start||0)-(b.start||0));
-  const s={n:0,bestRun:0,bestMonth:0,comebacks:0,prs:0,bestGain:0,maxVol:0,vol:0,maxMins:0,bestWeekParts:0,exCount:0,early:0,late:0};
+  const s={runs:0,longRun:0,runKm:0,fast5k:0,n:0,bestRun:0,bestMonth:0,comebacks:0,prs:0,bestGain:0,maxVol:0,vol:0,maxMins:0,bestWeekParts:0,exCount:0,early:0,late:0};
   const best={},first1={},max1={},months={},weekParts={},exs=new Set(),earned={};
   let run=0,lastWk=null,lastDate=null;
   for(const w of ws){
@@ -492,6 +556,7 @@ function trophyState(list){
     if(lastDate!==w.date){const mo=monthOf(w.date);months[mo]=(months[mo]||0)+1;s.bestMonth=Math.max(s.bestMonth,months[mo])}
     lastDate=w.date;
     (weekParts[wk]=weekParts[wk]||new Set());(w.parts||[]).forEach(p=>weekParts[wk].add(p));s.bestWeekParts=Math.max(s.bestWeekParts,weekParts[wk].size);
+    if(isRun(w)){s.runs++;s.runKm+=w.run.km;s.longRun=Math.max(s.longRun,Math.floor(w.run.km*10)/10);if(w.run.km>=5&&w.run.mins/w.run.km<=5)s.fast5k=1}
     const v=volOf(w);s.vol+=v;s.maxVol=Math.max(s.maxVol,v);
     if(w.start&&w.end&&w.end>w.start)s.maxMins=Math.max(s.maxMins,Math.round((w.end-w.start)/60000));
     if(w.start){const hr=new Date(w.start).getHours();if(hr<7&&hr>=3)s.early=1;if(hr>=21)s.late=1}
@@ -542,7 +607,7 @@ function viewHome(){
   if(S.active)h+='<button class="card resume" data-tab-go="workout"><span class="pbi" aria-hidden="true">'+actIcon("gym")+'</span><span class="pbt"><b>Workout in progress</b><small>'+esc(S.active.parts.join(" + "))+' · '+pl(S.active.ex.reduce((a,e)=>a+e.sets.length,0),"set")+' so far</small></span><span class="go" aria-hidden="true">›</span></button>';
   h+='<section class="card streak-hero"><div class="sh-top"><div><span class="sh-n num">'+st+'</span><span class="sh-l">week<br>streak</span></div>'+
     '<div class="sh-side"><b class="num">'+nWeek+'</b><small>'+(nWeek===1?"workout":"workouts")+' this week</small><b class="num">'+monthDays(monthOf(today))+'</b><small>days this month</small></div></div>'+
-    '<div class="sh-week">'+["M","T","W","T","F","S","S"].map((l,i)=>'<span class="'+(days[i]?"on":"")+(i===ti?" today":"")+'"><i>'+(days[i]?actIcon("gym"):"")+'</i><small>'+l+'</small></span>').join("")+'</div>'+
+    '<div class="sh-week">'+["M","T","W","T","F","S","S"].map((l,i)=>'<span class="'+(days[i]?"on":"")+(i===ti?" today":"")+'"><i>'+(days[i]?actIcon(dayAct((()=>{const d0=parse(wk);d0.setDate(d0.getDate()+i);return dkey(d0)})())):"")+'</i><small>'+l+'</small></span>').join("")+'</div>'+
     '<p class="sub sh-msg">'+(nWeek?(st>1?"You’ve trained "+st+" weeks in a row. Keep the chain going.":"Nice! This week counts toward your streak."):(st?"Train this week to keep your "+st+"-week streak alive.":"One workout this week starts your streak."))+'</p></section>';
   const {earned}=trophyState(),recent=TROPHIES.filter(t=>earned[t.id]).sort((a,b)=>earned[b.id].localeCompare(earned[a.id])).slice(0,3);
   if(recent.length)h+='<button class="card tro-strip" data-tab-go="progress" data-scroll="trophies"><span class="tsl">Latest trophies</span><span class="tsr">'+recent.map(t=>trophyIcon(t,"sm")).join("")+'</span><span class="tsn">'+esc(recent[0].name)+'</span><span class="go" aria-hidden="true">›</span></button>';
@@ -551,18 +616,19 @@ function viewHome(){
   const prSet=prMap();
   for(const w of ws.slice(0,homeShow)){
     const open=openId===w.id,mins=w.start&&w.end&&w.end>w.start?Math.round((w.end-w.start)/60000):0,prs=prSet[w.id]||[];
-    const tod=timeOfDay(w),title=(tod?tod+" ":"")+w.parts.join(" + ");
+    const tod=timeOfDay(w),title=isRun(w)?(tod?tod+" run":"Run"):(tod?tod+" ":"")+w.parts.join(" + ");
     h+='<section class="card act'+(open?' open':'')+'"><button class="wk" data-open="'+w.id+'" aria-expanded="'+open+'">'+
       '<span class="act-h">'+avHtml(isGuest()?"G":(user.name||user.email),myPhoto(),"sm")+'<span><b>'+esc(firstName()||"You")+'</b><small>'+relDay(w.date)+'</small></span></span>'+
       '<span class="act-t">'+esc(title)+'</span>'+
-      '<span class="act-s"><span><small>Time</small><b class="num">'+(mins?mins+' min':'–')+'</b></span><span><small>Sets</small><b class="num">'+allSets(w).length+'</b></span><span><small>Volume</small><b class="num">'+fmt(volOf(w))+' kg</b></span>'+(prs.length?'<span class="hot"><small>PRs</small><b class="num">'+prs.length+'</b></span>':'')+'</span>'+
+      (isRun(w)?'<span class="act-s"><span><small>Distance</small><b class="num">'+kmStr(runKm(w))+' km</b></span><span><small>Time</small><b class="num">'+runMins(w)+' min</b></span><span><small>Pace</small><b class="num">'+paceStr(runMins(w),runKm(w))+' /km</b></span></span>':
+      '<span class="act-s"><span><small>Time</small><b class="num">'+(mins?mins+' min':'–')+'</b></span><span><small>Sets</small><b class="num">'+allSets(w).length+'</b></span><span><small>Volume</small><b class="num">'+fmt(volOf(w))+' kg</b></span>'+(prs.length?'<span class="hot"><small>PRs</small><b class="num">'+prs.length+'</b></span>':'')+'</span>')+
       '<span class="act-x">'+w.ex.slice(0,open?99:3).map(e=>{const t=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);
         return '<span><i>'+esc(e.name)+(prs.includes(e.name)?' <em class="prb">PR</em>':'')+'</i><b class="num">'+(open?e.sets.map(s=>wl(s.w)+"×"+s.r).join(" · "):pl(e.sets.length,"set")+' · best '+(t.w?wl(t.w):"BW")+'×'+t.r)+'</b></span>'}).join("")+
       (!open&&w.ex.length>3?'<span class="more">+'+(w.ex.length-3)+' more</span>':'')+'</span></button>';
     const nTro=TROPHIES.filter(t=>earned[t.id]===w.date).length,ach=[prs.length?pl(prs.length,"PR"):"",nTro?nTro+(nTro===1?" trophy":" trophies"):""].filter(Boolean).join(" · ");
     const shareRow='<div class="act-f"><span class="act-ach">'+(ach?'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+TI.star+'</svg>'+ach:'')+'</span><button class="act-share" data-sharew="'+w.id+'" aria-label="Share this workout">'+SHARE_ICON+'Share</button></div>';
     if(w.photo||open)h+='<div class="act-ph" data-phw="'+w.id+'" data-mode="'+(open?"feed":"feed-ro")+'">'+photoSlot(w.id,open?"feed":"feed-ro")+'</div>';
-    if(open)h+='<div class="row act-a"><button class="btn" data-editw="'+w.id+'">Edit workout</button><button class="btn ghost" data-delw="'+w.id+'">Delete</button></div>';
+    if(open)h+='<div class="row act-a"><button class="btn" data-editw="'+w.id+'">'+(isRun(w)?"Edit run":"Edit workout")+'</button><button class="btn ghost" data-delw="'+w.id+'">Delete</button></div>';
     h+=shareRow;
     h+='</section>';
   }
@@ -895,6 +961,7 @@ addEventListener("popstate",e=>{
   if(isGuest()&&authOpen){authOpen=false;authMsg="";render();return}
   const A=S.active;
   if(A&&A.cur!=null&&tab==="workout"&&!st.ex){discardExercise(true);return}
+  if(runForm&&!st.ex){runForm=null;render();return}
   if(st.guard){try{NAV.pushState({tab:"home",root:1,d:1},"")}catch(x){}if(tab!=="home")go("home",true);else render();return}
   if(st.root){if(tab!=="home")go("home",true);else render();return}
   // landed on a page entry from something deeper: always continue to Home
@@ -916,6 +983,7 @@ function startWorkout(p){
 }
 function editWorkout(wid){
   const w=S.workouts.find(x=>x.id===wid);if(!w)return;
+  if(isRun(w)){openRunForm(w);return}
   if(S.active){toast(S.active.edit?"You’re already editing a workout.":"Finish or discard your current workout first.",null);go("workout");return}
   const mins=w.start&&w.end&&w.end>w.start?Math.round((w.end-w.start)/60000):60;
   S.active={id:w.id,edit:w.id,date:w.date,start:w.start||parse(w.date).setHours(18,0,0,0),past:true,mins:Math.max(5,Math.min(300,mins)),parts:w.parts.slice(),ex:JSON.parse(JSON.stringify(w.ex)),cur:null};
@@ -994,7 +1062,7 @@ function setActDate(v){
 }
 function openDatePicker(forWhat){
   const today=dkey(new Date()),y=new Date();y.setDate(y.getDate()-1);
-  const max=forWhat==="log"?dkey(y):today,sel=forWhat==="log"?(logDate||""):(S.active&&S.active.date||today);
+  const max=forWhat==="log"?dkey(y):today,sel=forWhat==="log"?(logDate||""):forWhat==="run"?(runForm&&runForm.date||today):(S.active&&S.active.date||today);
   dp={for:forWhat,max,sel,ym:(sel||max).slice(0,7)};
   document.getElementById("dpick").hidden=false;navPush({ov:"dpick"});drawDatePicker();
 }
@@ -1018,7 +1086,7 @@ document.getElementById("dpick").addEventListener("click",e=>{
   const mb=e.target.closest("[data-dpm]");if(mb&&!mb.disabled){const[y,m]=dp.ym.split("-").map(Number),nd=new Date(y,m-1+(+mb.dataset.dpm),1);dp.ym=nd.getFullYear()+"-"+pad(nd.getMonth()+1);drawDatePicker();return}
   const db=e.target.closest("[data-dpday]");if(!db)return;
   const k=db.dataset.dpday,f=dp.for;closeDatePicker();
-  if(f==="log"){logDate=k;msgText=""}else setActDate(k);
+  if(f==="log"){logDate=k;msgText=""}else if(f==="run"){if(runForm)runForm.date=k}else setActDate(k);
   render();
 });
 
@@ -1183,12 +1251,17 @@ function shareDataFor(w){
     trophies:TROPHIES.filter(t=>earned[t.id]===w.date).map(t=>({name:t.name,desc:t.desc,icon:t.icon})),
     ex:w.ex.map(e=>{const t=e.sets.reduce((m,s)=>s.w>m.w||(s.w===m.w&&s.r>m.r)?s:m,e.sets[0]);return{name:e.name,w:t.w,r:t.r,n:e.sets.length}})};
 }
-async function shareWorkout(wid){const w=S.workouts.find(x=>x.id===wid);if(!w)return;if(w.photo&&!PH[w.id]){const d=await idbGet(phKey(w.id));if(d)PH[w.id]=d}openShare(workoutSpec(shareDataFor(w)))}
+async function shareWorkout(wid){const w=S.workouts.find(x=>x.id===wid);if(!w)return;if(w.photo&&!PH[w.id]){const d=await idbGet(phKey(w.id));if(d)PH[w.id]=d}openShare(isRun(w)?runSpec(w):workoutSpec(shareDataFor(w)))}
+function runDaysIn(ym){const out=[];for(let i=1;i<=31;i++){const k=ym+"-"+pad(i);if(S.workouts.some(x=>x.date===k)&&dayAct(k)==="run")out.push(i)}return out}
+function runSpec(w){const d=shareDataFor(w),k=w.run.km,m=w.run.mins,tod=timeOfDay(w);
+  return{photo:PH[w.id]||"",dateLabel:long(w.date).toUpperCase(),kicker:((tod?tod+" ":"")+"RUN").toUpperCase(),h:{red:["RAN IT.","OWNED IT."],iron:["MILES","EARNED."],chalk:["RUN","DONE."]}[curTheme()],
+    stats:[["DISTANCE",kmStr(k),"km",true],["TIME",String(m),"min"],["PACE",paceStr(m,k),"/km"],["SPEED",String(Math.round(k/(m/60)*10)/10),"km/h"]],
+    ym:monthOf(w.date),cal:d.cal,runDays:runDaysIn(monthOf(w.date)),mark:[+w.date.slice(8)],streak:d.streak,monthDays:d.monthDays,rows:d.trophies.map(t=>({name:t.name,right:"",badge:"TROPHY"}))}}
 function workoutSpec(d){
   const prN=new Set(d.prs.map(p=>p.name));
   return{photo:PH[d.id]||"",dateLabel:long(d.date).toUpperCase(),kicker:(d.parts.join(" + ")+" DAY").toUpperCase(),
     stats:[["LIFTED",fmt(d.vol),"kg"],["SETS",String(d.sets),""],["TIME",d.mins?String(d.mins):"–",d.mins?"min":""],["PRs",String(d.prs.length),"",d.prs.length>0]],
-    ym:monthOf(d.date),cal:d.cal||[],mark:[+d.date.slice(8)],streak:d.streak,monthDays:d.monthDays,
+    ym:monthOf(d.date),cal:d.cal||[],runDays:runDaysIn(monthOf(d.date)),mark:[+d.date.slice(8)],streak:d.streak,monthDays:d.monthDays,
     rows:(d.trophies||[]).map(t=>({name:t.name,right:"",badge:"TROPHY"})).concat((d.ex||[]).slice().sort((a,b)=>prN.has(b.name)-prN.has(a.name)).slice(0,4).map(r=>({name:r.name,right:(r.w?kg(r.w)+" kg":"BW")+" × "+r.r,badge:prN.has(r.name)?"PR":""})))};
 }
 async function drawStory(sp){
@@ -1250,8 +1323,9 @@ async function drawStory(sp){
   ["M","T","W","T","F","S","S"].forEach((l,i)=>c.fillText(l,gx+i*pitch+cs/2,cy+56));
   for(let dd=1;dd<=nd;dd++){const ix=(lead+dd-1)%7,iy=Math.floor((lead+dd-1)/7),cx=gx+ix*pitch,cyy=gy+iy*pitch;
     if(on.has(dd)){c.fillStyle=t==="chalk"?"#0B0B0B":P.acc;rrect(c,cx,cyy,cs,cs,12);c.fill();
-      c.strokeStyle=t==="chalk"?"#D4FF3A":P.accInk;c.lineWidth=4;c.lineCap="round";c.beginPath();
-      [[13,14,13,30],[31,14,31,30],[8,18,8,26],[36,18,36,26],[13,22,31,22]].forEach(q=>{c.moveTo(cx+q[0],cyy+q[1]);c.lineTo(cx+q[2],cyy+q[3])});c.stroke()}
+      c.strokeStyle=t==="chalk"?"#D4FF3A":P.accInk;c.lineWidth=4;c.lineCap="round";c.lineJoin="round";
+      if((sp.runDays||[]).includes(dd)){c.save();c.translate(cx+6,cyy+6);c.scale(32/24,32/24);c.lineWidth=2.4;["M9 21l2.5-6 3 2.5V22","M6 12.5 9 9l4 .5 2.5 3.5 3 .5","M11.5 15 13 9.5"].forEach(d=>c.stroke(new Path2D(d)));c.beginPath();c.arc(14.5,4.5,2,0,Math.PI*2);c.stroke();c.restore()}
+      else{c.beginPath();[[13,14,13,30],[31,14,31,30],[8,18,8,26],[36,18,36,26],[13,22,31,22]].forEach(q=>{c.moveTo(cx+q[0],cyy+q[1]);c.lineTo(cx+q[2],cyy+q[3])});c.stroke()}}
     else{c.strokeStyle=P.line;c.lineWidth=2;rrect(c,cx+1,cyy+1,cs-2,cs-2,12);c.stroke();c.fillStyle=P.mute;c.font="600 "+BODY.replace("{s}",20);c.fillText(String(dd),cx+cs/2,cyy+29)}
     if(mk.has(dd)){c.strokeStyle=P.hot;c.lineWidth=4;rrect(c,cx-5,cyy-5,cs+10,cs+10,15);c.stroke()}}
   c.textAlign="left";
@@ -1293,7 +1367,7 @@ function recapSpec(per){
   const H={red:per==="week"?["MY WEEK","IN IRON."]:["MY MONTH","IN IRON."],iron:per==="week"?["WEEKLY","GRIND."]:["MONTHLY","GRIND."],chalk:per==="week"?["WEEK","RECAP."]:["MONTH","RECAP."]}[curTheme()];
   return{dateLabel:wkLabel,kicker:(per==="week"?"THIS WEEK":"THIS MONTH")+" · "+pl(ws.length,"WORKOUT").toUpperCase(),h:H,
     stats:[["WORKOUTS",String(ws.length),""],["DAYS",String(days.size),""],["PRs",String(prs),"",prs>0],["VOLUME",vol>=1e5?(vol/1000).toFixed(0)+"k":fmt(vol),"kg"]],
-    ym,cal:[...trainedDays()].filter(k=>k.slice(0,7)===ym).map(k=>+k.slice(8)),mark:mk,streak:weekStreak(),monthDays:monthDays(ym),rows,count:ws.length};
+    ym,cal:[...trainedDays()].filter(k=>k.slice(0,7)===ym).map(k=>+k.slice(8)),runDays:runDaysIn(ym),mark:mk,streak:weekStreak(),monthDays:monthDays(ym),rows,count:ws.length};
 }
 let shareSpec=null;
 async function openShare(spec){
@@ -1359,6 +1433,9 @@ app.addEventListener("click",e=>{
   if(d.start){startWorkout(d.start);return}
   if(d.tabGo){go(d.tabGo);if(d.scroll)setTimeout(()=>{const el=document.getElementById(d.scroll);if(el)el.scrollIntoView({block:"start",behavior:"smooth"})},50);return}
   if(d.trocat){trophyCat=d.trocat;render();return}
+  if(d.rundate&&runForm){runForm.date=d.rundate;render();return}
+  if(d.runstep&&runForm){const k=d.runstep,v=parseFloat(String(runForm[k]).replace(",","."))||0,n=Math.max(0,Math.round((v+parseFloat(d.d))*100)/100);runForm[k]=k==="mins"?String(Math.round(n)):String(n);
+    const inp=document.getElementById(k==="mins"?"run-m":"run-k");if(inp)inp.value=runForm[k];const lv=document.getElementById("runLive");if(lv)lv.innerHTML=runLive();return}
   if(d.sharew){shareWorkout(d.sharew);return}
   if(d.tromore){troOpen[d.tromore]=!troOpen[d.tromore];render();if(!troOpen[d.tromore]){const el=b.closest(".tro-cat");if(el)el.scrollIntoView({block:"nearest"})}return}
   if(d.pick){pickPart=d.pick;render();return}
@@ -1397,6 +1474,9 @@ app.addEventListener("click",e=>{
     case"signout":signOut();break;
     case"shareinvite":shareInvite();break;
     case"homemore":homeShow+=15;render();break;
+    case"runform":openRunForm();break;
+    case"saverun":saveRun();break;
+    case"cancelrun":runForm=null;navPopIf("ex",1);render();break;
     case"showprs":prScope="period";openPrs();break;
     case"allrecs":recsAll=!recsAll;render();break;
     case"rmphoto":removePhoto();break;
@@ -1417,7 +1497,8 @@ app.addEventListener("click",e=>{
       sendReset(user.email).then(()=>{acctMsg.reset="Reset link sent to "+user.email+". Check your spam folder too."}).catch(e=>{acctMsg.reset=friendly(e)}).then(()=>{if(tab==="account")render()});break;
   }
 });
-app.addEventListener("input",e=>{const k=e.target.dataset&&e.target.dataset.draft;if(k)draft[k]=e.target.value});
+app.addEventListener("input",e=>{const k=e.target.dataset&&e.target.dataset.draft;if(k)draft[k]=e.target.value;
+  const r=e.target.dataset&&e.target.dataset.run;if(r&&runForm){runForm[r]=e.target.value;if(runForm.msg){runForm.msg="";const mm=app.querySelector(".runcard .msg");if(mm)mm.textContent=""}const lv=document.getElementById("runLive");if(lv)lv.innerHTML=runLive()}});
 app.addEventListener("change",async e=>{
   if(e.target.id==="photoIn"){const f=e.target.files&&e.target.files[0];e.target.value="";if(f)setPhoto(f);return}
   if(e.target.id==="exSel"){progEx=e.target.value;render();return}

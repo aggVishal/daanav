@@ -26,6 +26,7 @@ A gym workout tracker: pick a body part, choose an exercise, log each set's weig
 - Post-workout photo on the celebration screen, your story image and the Home feed (iPhone HEIC photos work in every browser via heic2any, MIT)
 - Edit any saved workout (sets, exercises, date, time); tap a set to change it
 - Workout time shown before saving, with a quick check if everything was logged at once
+- Log runs (time + km) with pace, running stats on Progress and running trophies
 - Trophy case: 29 Daanav trophies for showing up, consistency, strength, intensity and variety — you vs you
 - Share your weekly or monthly recap as a story image from the Progress tab
 - Back button / swipe-back works on every screen

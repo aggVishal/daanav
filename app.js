@@ -12,7 +12,7 @@ const LIB={
   Legs:["Squat","Leg press","Romanian deadlift","Walking lunges","Bulgarian split squat","Leg extension","Leg curl","Hip thrust","Calf raise"],
   Biceps:["Barbell curl","Dumbbell curl","Hammer curl","Preacher curl","Cable curl","Incline dumbbell curl"],
   Triceps:["Tricep pushdown","Overhead tricep extension","Skull crushers","Close-grip bench press","Tricep dips"],
-  Core:["Hanging leg raise","Cable crunch","Ab wheel rollout","Russian twist","Crunches"],
+  Core:["Hanging leg raise","Cable crunch","Ab wheel rollout","Russian twist","Crunches","Farmer's walk"],
   Forearms:["Wrist curl","Reverse wrist curl","Reverse curl","Hammer curl","Dumbbell wrist curl","Dumbbell reverse wrist curl","Behind-the-back wrist curl","Cable wrist curl","Wrist roller","Farmer's walk","Plate pinch"],
   Glutes:["Hip thrust","Glute bridge","Single-leg glute bridge","Cable kickback","Glute kickback","Sumo squat","Step-ups","Hip abduction (machine)","Hip adduction (machine)"]
 };

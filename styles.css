@@ -810,3 +810,5 @@ nav .fab-c{position:relative}
 .runbest span{background:var(--soft);border-radius:14px;padding:10px 12px}
 .runbest small{display:block;color:var(--mute);font-size:12px}
 .runbest b{display:block;font:var(--dw) 20px/1.2 var(--display)}
+.eqhint{margin:-2px 2px 12px;font-size:13px;color:var(--mute);line-height:1.4}
+.stickybar{background:linear-gradient(to top,var(--bg) calc(100% - 14px),transparent);padding-top:16px}

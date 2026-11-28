@@ -281,9 +281,10 @@ function viewLogger(A){
   h+='<div class="last">'+(l?'<b>Last time, '+short(l.date)+':</b> <span class="num">'+l.sets.map(s=>wl(s.w,1)+"×"+s.r).join(" · ")+'</span>':'No previous sessions. Start with a weight you can do with good form.')+'</div>';
   h+='<div class="sets">'+E.sets.map((s,i)=>{
     const isPR=prev>0&&s.w>prev&&E.sets.findIndex(x=>x.w===s.w)===i&&Math.max(...E.sets.slice(0,i).map(x=>x.w),0)<s.w;
-    return '<div class="set'+(popSet&&i===E.sets.length-1?" new":"")+(editSet===i?" editing":"")+'"><span class="n">'+(i+1)+'</span><button class="v" data-editset="'+i+'" aria-label="Edit set '+(i+1)+'">'+(s.w?kg(s.w)+' <small>kg</small>':'<small>Bodyweight</small>')+' × '+s.r+' <small>reps</small><svg class="pen" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button>'+
+    return '<div class="set'+(popSet&&i===E.sets.length-1?" new":"")+(editSet===i?" editing":"")+'"><span class="n">'+(i+1)+'</span><button class="v" data-editset="'+i+'" aria-label="Edit set '+(i+1)+'">'+(s.w?kg(s.w)+' <small>kg'+eqInfo(E.name).unit+'</small>':'<small>Bodyweight</small>')+' × '+s.r+' <small>reps'+eqInfo(E.name).ru+'</small><svg class="pen" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button>'+
       (isPR?'<span class="pr">PR</span>':'<span></span>')+'<button class="x" data-delset="'+i+'" aria-label="Delete set '+(i+1)+'">×</button></div>'}).join("")+'</div>';
-  h+='<div class="steppers">'+stepper("w","Weight (kg)",2.5)+stepper("r","Reps",1)+'</div>';
+  const EI=eqInfo(E.name);
+  h+='<div class="steppers">'+stepper("w",EI.w,2.5)+stepper("r",EI.r,1)+'</div>'+(EI.hint?'<p class="eqhint">'+esc(EI.hint)+'</p>':'');
   if(editSet!=null&&!E.sets[editSet])editSet=null;
   h+=editSet!=null?'<button class="btn wide log" data-act="logset">Update set '+(editSet+1)+'</button><button class="link" data-act="canceledit" style="display:block;margin:8px auto 0">Cancel editing set</button>'
     :'<button class="btn wide log" data-act="logset">Log set '+(E.sets.length+1)+'</button>';
@@ -302,6 +303,40 @@ function syncPhotoAnim(){
   const now=performance.now();
   app.querySelectorAll(".fig2").forEach(f=>{const k=f.getAttribute("aria-label")||"";if(animT0[k]==null)animT0[k]=now;
     const d=-(now-animT0[k])+"ms";f.querySelectorAll(".ph-b,.ph,svg *").forEach(el=>{if(getComputedStyle(el).animationName!=="none")el.style.animationDelay=d})});
+}
+/* How each exercise is loaded, so the logger asks for the right weight and reps. */
+const EQ=(()=>{const m={},set=(t,l)=>l.forEach(n=>m[n]=t);
+  set("bar",["Bench press","Incline bench press","Deadlift","Barbell row","Overhead press","Shrugs","Squat","Romanian deadlift","Hip thrust","Barbell curl","Close-grip bench press","Upright row","Wrist curl","Reverse wrist curl","Reverse curl","Behind-the-back wrist curl","Glute bridge"]);
+  set("ez",["Preacher curl","Skull crushers"]);
+  set("tbar",["T-bar row"]);
+  set("db2",["Dumbbell bench press","Incline dumbbell press","Dumbbell shoulder press","Arnold press","Lateral raise","Front raise","Rear delt fly","Dumbbell curl","Hammer curl","Incline dumbbell curl","Dumbbell shrug","Dumbbell wrist curl","Dumbbell reverse wrist curl","Farmer's walk"]);
+  set("db1",["Dumbbell pullover","Sumo squat","Goblet squat","Overhead tricep extension","Russian twist"]);
+  set("dbArm",["Dumbbell row"]);
+  set("dbLeg",["Walking lunges","Bulgarian split squat","Step-ups"]);
+  set("legUni",["Single-leg glute bridge","Glute kickback"]);
+  set("cableLeg",["Cable kickback"]);
+  set("cable",["Cable crossover","Lat pulldown","Seated cable row","Face pull","Tricep pushdown","Cable curl","Cable crunch","Cable shrug","Cable upright row","Cable rear delt fly","Cable rear delt row","Cable wrist curl"]);
+  set("machine",["Machine chest press","Chest fly (machine)","Leg press","Leg extension","Leg curl","Calf raise","Hip abduction (machine)","Hip adduction (machine)"]);
+  set("body",["Push-ups","Pull-ups","Dips","Tricep dips","Hanging leg raise","Ab wheel rollout","Crunches"]);
+  set("assist",["Assisted pull-ups"]);
+  return m})();
+function eqInfo(name){
+  const t=EQ[name]||(/dumbbell/i.test(name)?"db2":/barbell/i.test(name)?"bar":/cable/i.test(name)?"cable":/machine/i.test(name)?"machine":"");
+  const I={
+    bar:{w:"Total weight (kg)",hint:"Include the bar: a standard Olympic bar is 20 kg (women’s bar 15 kg). Example: bar + 2 × 10 kg plates = 40 kg.",unit:""},
+    ez:{w:"Total weight (kg)",hint:"Include the bar: an EZ curl bar is usually 7–10 kg.",unit:""},
+    tbar:{w:"Plates loaded (kg)",hint:"Add up the plates on the bar.",unit:""},
+    db2:{w:"Per dumbbell (kg)",hint:"Enter one dumbbell’s weight, not both added together.",unit:" each"},
+    db1:{w:"Dumbbell weight (kg)",hint:"The weight of the one dumbbell you’re holding.",unit:""},
+    dbArm:{w:"Dumbbell weight (kg)",r:"Reps per arm",hint:"Log the reps for one arm; do the same on the other side.",unit:"",ru:"/arm"},
+    dbLeg:{w:"Per hand (kg)",r:"Reps per leg",hint:"Enter one dumbbell’s weight (0 if bodyweight) and the reps for one leg.",unit:" each",ru:"/leg"},
+    legUni:{w:"Extra weight (kg)",r:"Reps per leg",hint:"Leave weight at 0 for bodyweight. Log the reps for one leg.",unit:"",ru:"/leg"},
+    cableLeg:{w:"Stack weight (kg)",r:"Reps per leg",hint:"Log the reps for one leg.",unit:"",ru:"/leg"},
+    cable:{w:"Stack weight (kg)",hint:"",unit:""},
+    machine:{w:"Machine weight (kg)",hint:"",unit:""},
+    body:{w:"Extra weight (kg)",hint:"Leave weight at 0 for bodyweight; add a belt or vest weight if you use one.",unit:""},
+    assist:{w:"Assistance (kg)",hint:"How much the band or machine helps you.",unit:""}}[t]||{w:"Weight (kg)",hint:"",unit:""};
+  return Object.assign({t,r:"Reps",ru:""},I);
 }
 function stepper(k,label,step){
   return '<div class="step"><label for="in-'+k+'">'+label+'</label><div class="ctl"><button data-step="'+k+'" data-d="-'+step+'" aria-label="Less">−</button>'+
